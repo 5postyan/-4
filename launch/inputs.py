@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import copy
+import csv
 import hashlib
 import json
 import re
@@ -39,7 +40,7 @@ def _first_column(frame: pd.DataFrame, names: tuple[str, ...]) -> str | None:
 
 
 def _timestamp_column(frame: pd.DataFrame) -> str:
-    column = _first_column(frame, ("timestamp", "datetime", "date_time", "time", "date"))
+    column = _first_column(frame, ("timestamp", "timestamp utc", "datetime", "date_time", "time", "date"))
     if column is None and len(frame.columns):
         # CSV exports often store their timestamp in the first, unnamed column.
         first = frame.columns[0]
@@ -50,8 +51,24 @@ def _timestamp_column(frame: pd.DataFrame) -> str:
     return column
 
 
+def _csv_format(path: Path) -> tuple[str, str]:
+    """Detect the CSV delimiter while keeping decimal commas inside semicolon files."""
+    with path.open("r", encoding="utf-8-sig", newline="") as stream:
+        sample = stream.read(16384)
+
+    try:
+        delimiter = csv.Sniffer().sniff(sample, delimiters=";,\t|").delimiter
+    except csv.Error:
+        header = sample.splitlines()[0] if sample.splitlines() else ""
+        delimiter = max((",", ";", "\t", "|"), key=header.count)
+
+    decimal = "," if delimiter == ";" else "."
+    return delimiter, decimal
+
+
 def _read_time_series(path: Path) -> pd.DataFrame:
-    frame = pd.read_csv(path, encoding="utf-8-sig")
+    delimiter, decimal = _csv_format(path)
+    frame = pd.read_csv(path, sep=delimiter, decimal=decimal, encoding="utf-8-sig")
     timestamp_column = _timestamp_column(frame)
     timestamps = pd.to_datetime(frame[timestamp_column], utc=True, errors="raise")
     frame["timestamp"] = timestamps
@@ -183,3 +200,4 @@ class Inputs:
         combined = _stable_hash([history, telemetry, control, dashboard])
         # Index 0 is the aggregate; stages 1–4 use the remaining hashes.
         return [combined, history, telemetry, control, dashboard]
+
