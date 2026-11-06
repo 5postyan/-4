@@ -1,0 +1,11 @@
+# Local case data contains object identifiers and must not be published.
+/data/
+/out/
+/logs/
+/dashboard.html
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.DS_Store
