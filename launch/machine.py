@@ -75,7 +75,7 @@ class Launch:
                          blockers=[f"{o['check']}: {o.get('reason') or o.get('field')}" for o in s["obstacles"]][:6])
                 self.prev_status[n] = s["status"]
             if s["status"] == "completed": self.confirmed[n] = hs[n]
-        self.hashes_seen = hs
+        self.hashes_seen = {n: hs[n] for n in NAMES}
         ready = all(s["status"] == "completed" for s in stages)
         self.result = {"object_id": self.oid, "name": I.passport.get("name"), "rules_version": self.R["version"], "check_point": self.R["check_point_utc"],
                        "ready": ready, "stages": stages, "corrections": I.corrections, "missing_files": I.missing_files,
@@ -122,5 +122,6 @@ def protocol_md(res, journal):
         if e["event"] == "stage_transition": d = f"{e['from']} → {e['to']}" + (f" ({e['reason']})" if e.get("reason") else "")
         L.append(f"| {e['seq']} | {e['time']} | {e['actor']} | {e['event']} | {e.get('stage') or ''} | {d} |")
     return "\n".join(L)
+
 
 
