@@ -1,6 +1,8 @@
 """Small standard-library HTTP server for the generated dashboard."""
 import logging
 import os
+import threading
+import webbrowser
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -38,9 +40,13 @@ def serve():
         raise FileNotFoundError(f"Dashboard not found: {OUT / 'index.html'}")
     server = ThreadingHTTPServer((host, port), DashboardHandler)
     logger.info("Dashboard available on port=%s", port)
+    if os.environ.get("LAUNCH_OPEN_BROWSER") == "1":
+        threading.Timer(1.0, webbrowser.open, args=(f"http://127.0.0.1:{port}",)).start()
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         logger.info("Server stopped by user")
     finally:
         server.server_close()
+
+
