@@ -1,0 +1,65 @@
+{
+ "version": "1.0.0",
+ "check_point_utc": "2026-11-05T09:15:00Z",
+ "history": {
+  "window_start_utc": "2024-11-04T23:00:00Z",
+  "window_end_utc": "2026-10-31T22:45:00Z",
+  "months_required": 24,
+  "fallback_validated_to_raw": true,
+  "ca_overshoot_factor": 1.2,
+  "cross_object_duplicate_share": 0.99,
+  "unit_consistency_min_share": 0.85,
+  "_note": "Расчётный период закрыт по 31.10.2026: строки с 01.11 в выгрузках пустые. Окно 24 мес. = 05.11.2024…31.10.2026 (допущение демо; уточнить у кейсодержателей)."
+ },
+ "realtime": {
+  "max_age_min": 30,
+  "min_completeness_pct": 99,
+  "window_hours": 48,
+  "control_signal_patterns": [
+   "setpoint",
+   "control"
+  ],
+  "consistency_tol_rel": 0.1,
+  "consistency_tol_abs_kwh": 0.05,
+  "consistency_min_share": 0.85,
+  "sentinels": [
+   9999,
+   -9999,
+   99999
+  ],
+  "soc_range": [
+   0,
+   100
+  ],
+  "binding_min_corr": 0.95,
+  "binding_max_lag_intervals": 8,
+  "_note": "Мгновенная мощность ≠ средняя за интервал: допускаем до 15% расхождений E≈P/4; реальные ошибки знака/единиц дают >90%."
+ },
+ "control": {
+  "tolerance_kw_abs": 1.0,
+  "tolerance_rel": 0.1,
+  "response_window_intervals": 2,
+  "min_ack_share": 0.9,
+  "sim_seed": 42,
+  "sim_commands_per_asset": 3
+ },
+ "dashboard": {
+  "required_blocks": [
+   "history",
+   "assets",
+   "control",
+   "quality_status"
+  ],
+  "required_passport_fields": [
+   "address.street",
+   "address.postal_code",
+   "address.city",
+   "address.country",
+   "coordinates"
+  ]
+ },
+ "responsible": {
+  "stages_1_3": "Инженер запуска",
+  "stage_4_acceptance": "Ответственный от кейсодержателей"
+ }
+}

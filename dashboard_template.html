@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Запуск энергетического объекта — карточка запуска</title>
+<style>
+:root{box-sizing:border-box;--bg:#f3f6f8;--card:#fff;--tx:#182b39;--mut:#607481;--bd:#dce5e9;--ok:#18734b;--okb:#e5f4eb;--wip:#9a6500;--wipb:#fff5dd;--bad:#aa3932;--badb:#fff0ed;--ns:#62727c;--nsb:#edf1f3;--acc:#176b87;--shadow:0 2px 10px #173a4c0b}
+*{box-sizing:border-box}html{scroll-padding-top:76px}body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}main{max-width:1260px;margin:0 auto;padding:26px 22px 42px}h1{font-size:clamp(23px,3vw,30px);line-height:1.2;margin:4px 0 7px;letter-spacing:-.02em}h2{font-size:18px;line-height:1.3;margin:20px 0 10px}.mut{color:var(--mut);font-size:13px}#meta{margin:0 0 17px}
+nav{position:sticky;top:0;z-index:5;display:flex;gap:7px;flex-wrap:wrap;margin:0 -6px 18px;padding:9px 6px;background:#f3f6f8ed;backdrop-filter:blur(8px);border-bottom:1px solid var(--bd)}nav button,.step button{border:1px solid var(--bd);background:var(--card);color:var(--tx);padding:8px 13px;border-radius:9px;cursor:pointer;font:inherit;transition:background .15s,border-color .15s}nav button:hover,.step button:hover{border-color:var(--acc)}nav button.on,.step button.on{background:var(--acc);color:#fff;border-color:var(--acc)}button:focus-visible,.obj:focus-visible{outline:3px solid #4dabc8;outline-offset:2px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,310px),1fr));gap:12px}.card{background:var(--card);border:1px solid var(--bd);border-radius:13px;padding:15px;box-shadow:var(--shadow)}.obj{cursor:pointer;transition:transform .15s,border-color .15s,box-shadow .15s}.obj:hover{transform:translateY(-2px);border-color:#9abac6;box-shadow:0 6px 18px #173a4c12}.obj.sel{border-color:var(--acc);box-shadow:0 0 0 2px #176b8724}.obj b{font-size:16px}.chips{display:flex;gap:5px;margin-top:10px;flex-wrap:wrap}.chip{display:inline-flex;align-items:center;font-size:12px;padding:4px 9px;border-radius:999px;font-weight:650;white-space:nowrap}.completed{background:var(--okb);color:var(--ok)}.in_progress{background:var(--wipb);color:var(--wip)}.blocked{background:var(--badb);color:var(--bad)}.not_started{background:var(--nsb);color:var(--ns)}
+.stage{margin:10px 0;padding:17px}.stage h3{margin:0 0 10px;font-size:16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}.ck{display:grid;grid-template-columns:100px minmax(0,1fr);gap:3px 10px;padding:10px 0;border-top:1px solid var(--bd);font-size:14px}.ck b{font-size:11px;letter-spacing:.025em}.pass{color:var(--ok)}.fail,.unavailable{color:var(--bad)}.warn,.pending{color:var(--wip)}.na{color:var(--ns)}.ob{margin:4px 0 5px 110px;font-size:13px;color:var(--mut);overflow-wrap:anywhere}.ob code{background:var(--nsb);padding:2px 5px;border-radius:4px;word-break:break-all}.next{margin-top:11px;padding:11px 13px;border-left:3px solid var(--acc);background:#edf5f7;border-radius:5px;font-size:14px}.ready{padding:11px 14px;border-radius:10px;font-weight:750;margin:10px 0 14px}.step{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0 14px}.scroll{overflow-x:auto;border-radius:10px}table{border-collapse:collapse;width:100%;font-size:13px;background:var(--card)}th,td{border-bottom:1px solid var(--bd);padding:9px 10px;text-align:left;vertical-align:top}th{position:sticky;top:0;background:#edf3f5;color:#354d59;font-weight:700}td{overflow-wrap:anywhere}pre{border:1px solid var(--bd);border-radius:8px;background:#f8fafb;padding:12px}
+@media(max-width:680px){main{padding:18px 13px 30px}nav{flex-wrap:nowrap;overflow-x:auto}nav button{flex:0 0 auto}.ck{grid-template-columns:1fr;gap:2px}.ob{margin-left:0}.stage{padding:14px}th,td{padding:7px 8px;font-size:12px}}
+</style></head><body><main>
+<h1>Запуск энергетического объекта — карточка запуска</h1>
+<div class="mut" id="meta"></div>
+<nav id="tabs"></nav><div id="view"></div>
+<p class="mut">Прототип: статусы вычисляются только детерминированными проверками (LLM не назначает готовность). Управление — только тестовый контур/имитатор, реальные команды не отправляются. Данные в страницу встроены снимком.</p>
+</main>
+<script>
+const D=__DATA__;
+const RU={completed:"Завершён",in_progress:"В работе",blocked:"Заблокирован",not_started:"Не начат"};
+const ST={pass:"ПРОЙДЕНО",fail:"ОШИБКА",warn:"ВНИМАНИЕ",na:"Н/П",unavailable:"НЕДОСТУПНО",pending:"ОЖИДАЕТ"};
+const e=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+let tab="objects",sel="building_2",step=0;
+const TABS=[["objects","Объекты (6)"],["flow","Сквозной запуск Building 2"],["scen","Сценарии ТЗ (11)"],["rules","Правила"]];
+function chips(r){return `<div class="chips">`+r.stages.map(s=>`<span class="chip ${s.status}" title="${e(s.name)}">${s.n}. ${RU[s.status]}</span>`).join("")+`</div>`}
+function ints(o){const a=(o.intervals||[]).filter(x=>x.from).slice(0,3).map(x=>`<code>${e(x.from)}${x.to&&x.to!==x.from?" … "+e(x.to):""}${x.n>1?" ("+x.n+")":""}</code>`).join(" ");return a}
+function stageHtml(s){
+ let h=`<div class="card stage"><h3>Этап ${s.n}. ${e(s.name)} <span class="chip ${s.status}">${RU[s.status]}</span><span class="mut">ответственный: ${e(s.responsible)}</span></h3>`;
+ if(s.unclosed_dependencies.length)h+=`<div class="mut">Незакрытые зависимости: ${s.unclosed_dependencies.map(d=>`этап ${d.stage} «${e(d.name)}» — ${RU[d.status]}`).join("; ")}</div>`;
+ if(!s.checks.length)h+=`<div class="mut">Проверки не запускались до завершения предыдущих этапов.</div>`;
+ s.checks.forEach(c=>{h+=`<div class="ck"><b class="${c.status}">${ST[c.status]}</b><div><b style="font-size:13px">${c.id}</b> ${e(c.title)} — ${e(c.summary)}<div class="mut">источник: ${e(c.evidence.source)} · правила v${e(c.evidence.rules)}${c.mandatory?"":" · необязательная"}</div></div></div>`;
+  (c.status==="fail"||c.status==="unavailable")&&c.obstacles.slice(0,4).forEach(o=>{h+=`<div class="ob">${e(o.asset||o.field||o.block||"")}${o.signals?" · "+e([].concat(o.signals).join(", ")):""}: ${e(o.reason||"")} ${ints(o)}</div>`})});
+ if(s.next_action)h+=`<div class="next"><b>Следующее действие:</b> ${e(s.next_action)}</div>`;
+ return h+"</div>"}
+function resHtml(r){return `<div class="ready ${r.ready?"completed":"blocked"}">${r.ready?"ОБЪЕКТ ГОТОВ К ЭКСПЛУАТАЦИИ":"Готовность не объявлена"} — ${e(r.object_id)} (${e(r.name||"")})</div>`+r.stages.map(stageHtml).join("")}
+const views={
+ objects(){const o=D.overview;return `<div class="grid">`+Object.entries(o).map(([k,r])=>`<div class="card obj ${k===sel?"sel":""}" onclick="sel='${k}';render()"><b>${e(r.name||k)}</b><div class="mut">${e(k)}</div>${chips(r)}</div>`).join("")+`</div><h2>Карточка: ${e(sel)}</h2>`+resHtml(o[sel])},
+ flow(){const f=D.flow,s=f.steps[step];const jl=f.journal.slice(0,s.journal_len);
+  return `<div class="mut">Один объект проходит блокировку → исправление → повторную проверку → запуск → изменение входов.</div><div class="step">`+f.steps.map((x,i)=>`<button class="${i===step?"on":""}" onclick="step=${i};render()">Шаг ${i+1}</button>`).join("")+`</div><h2>${e(s.title)}</h2>`+(s.rejected_request?`<div class="card"><b>Запрос «завершить этап 4» отклонён:</b> зависимости — ${s.rejected_request.unclosed_dependencies.map(d=>`этап ${d.stage} (${RU[d.status]})`).join(", ")}; материалы сохранены.</div>`:"")+resHtml(s.result)+
+  `<h2>Журнал (${jl.length})</h2><div class="card scroll"><table><tr><th>#</th><th>время (демо-часы)</th><th>кто</th><th>событие</th><th>этап</th><th>детали</th></tr>`+jl.map(j=>`<tr><td>${j.seq}</td><td>${e(j.time)}</td><td>${e(j.actor)}</td><td>${e(j.event)}</td><td>${j.stage||""}</td><td>${e(j.event==="stage_transition"?j.from+" → "+j.to:(j.reason||j.description||j.kind||""))}</td></tr>`).join("")+`</table></div>`},
+ scen(){const ok=D.scenarios.filter(s=>s.match).length;return `<div class="card"><b>Самопроверка: ${ok} из ${D.scenarios.length} сценариев дают ожидаемое поведение.</b><div class="mut">Ожидания выведены из правил ТЗ; эталон организаторов не использовался.</div></div><div class="card scroll" style="margin-top:8px"><table><tr><th>№</th><th>Сценарий</th><th>Ожидалось</th><th>Получено</th><th></th></tr>`+D.scenarios.map(s=>`<tr><td>${s.n}</td><td>${e(s.name)}<div class="mut">${e((s.blockers||[]).join(" · "))}</div></td><td>${e(JSON.stringify(s.expected))}</td><td>${e(JSON.stringify(s.got))}</td><td class="${s.match?"pass":"fail"}"><b>${s.match?"OK":"FAIL"}</b></td></tr>`).join("")+`</table></div>`},
+ rules(){return `<div class="card"><b>Версия правил ${e(D.rules.version)}</b> · точка проверки ${e(D.check_point)} · 6 объектов проверены за ${D.timing.overview_6_objects_sec} с (лимит ${D.timing.limit_sec_per_state} с).<pre style="white-space:pre-wrap;font-size:12.5px;overflow-x:auto">${e(JSON.stringify(D.rules,null,1))}</pre></div>`}};
+function render(){document.getElementById("tabs").innerHTML=TABS.map(([k,t])=>`<button class="${k===tab?"on":""}" onclick="tab='${k}';render()">${t}</button>`).join("");document.getElementById("view").innerHTML=views[tab]();
+ document.getElementById("meta").textContent=`правила v${D.rules.version} · точка проверки ${D.check_point}`}
+render();
+</script></body></html>
+

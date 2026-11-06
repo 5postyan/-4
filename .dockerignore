@@ -1,0 +1,10 @@
+.git
+**/__pycache__
+**/*.py[cod]
+.venv
+venv
+.env
+out
+logs
+data
+dashboard.html
