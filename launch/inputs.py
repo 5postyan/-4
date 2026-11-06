@@ -170,7 +170,11 @@ class Inputs:
             "ca_kwh": ("ca_kwh", "ca_energy_kWh", "Grid.energy_kWh.injection_invoice (kWh)"),
             "power_kW": ("power_kW", "Grid.power_kW.invoice (kW)", "Grid.power_kW (kW)"),
         }
-        object_ean = self.passport.get("ean", self.passport.get("EAN"))
+        object_ean = self.passport.get("ean") or self.passport.get("EAN")
+        grid_connection = self.passport.get("grid_connection")
+        if object_ean is None and isinstance(grid_connection, dict):
+            # Case passports store the meter identifiers under grid_connection.
+            object_ean = grid_connection.get("ean_offtake") or grid_connection.get("ean_injection")
         for target, candidates in aliases.items():
             if target in self.inv.columns:
                 continue
