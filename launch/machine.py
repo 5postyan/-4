@@ -51,7 +51,7 @@ class Launch:
             if n >= 3 and deps:
                 cs = []
             else:
-                cs = FN[n](I, self.R, self.ctx)
+                cs = FN[n](I)
             for c in cs: c["evidence"].update(checked_at=self.clock.peek(), check_point=self.R["check_point_utc"], input_hash=hs[n])
             mand = [c for c in cs if c["mandatory"]]
             blk = [c for c in mand if c["status"] in BLOCKING]
@@ -78,7 +78,8 @@ class Launch:
         self.hashes_seen = hs
         ready = all(s["status"] == "completed" for s in stages)
         self.result = {"object_id": self.oid, "name": I.passport.get("name"), "rules_version": self.R["version"], "check_point": self.R["check_point_utc"],
-                       "ready": ready, "stages": stages, "corrections": I.corrections,
+                       "ready": ready, "stages": stages, "corrections": I.corrections, "missing_files": I.missing_files,
+                       "input_errors": I.input_errors,
                        "stats": {"passed": sum(c["status"] == "pass" for s in stages for c in s["checks"]), "failed": sum(c["status"] in BLOCKING for s in stages for c in s["checks"])}}
         if ready and not any(e["event"] == "launch_ready" for e in self.journal[-3:]):
             self.log("launch_ready", actor, None, inputs_hash=hs[4], reason="все 4 этапа завершены, дашборды приняты")
