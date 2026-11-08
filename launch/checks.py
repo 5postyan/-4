@@ -87,7 +87,7 @@ def _check_time_step(df: pd.DataFrame, time_col: str) -> Tuple[bool, List[int]]:
     
     violations = []
     for idx, diff in enumerate(time_diffs):
-        if diff != pd.Timedelta(expected_seconds):
+        if diff != pd.Timedelta(seconds=expected_seconds):
             violations.append(idx + 1)
     
     return len(violations) == 0, violations
@@ -124,50 +124,88 @@ def _check_coverage(history_df: pd.DataFrame, start_utc: str, end_utc: str) -> T
     return passed, [] if passed else [0]
 
 
+def _history_window(history_df: pd.DataFrame) -> pd.DataFrame:
+    """Return records within the configured UTC history window."""
+    if history_df.empty:
+        return history_df.copy()
+    start = pd.to_datetime(RULES["history"]["window_start_utc"], utc=True)
+    end = pd.to_datetime(RULES["history"]["window_end_utc"], utc=True)
+    timestamps = pd.to_datetime(history_df["timestamp"], utc=True, errors="coerce")
+    return history_df.loc[(timestamps >= start) & (timestamps <= end)].copy()
+
+
+def _check_completeness(history_df: pd.DataFrame) -> Tuple[bool, float, List[int]]:
+    """Check validated energy readings, with the configured raw-data fallback."""
+    if history_df.empty:
+        return False, 0.0, []
+
+    fallback = bool(RULES["history"].get("fallback_validated_to_raw", False))
+    field_pairs = (
+        ("Grid.energy_kWh.offtake_invoice_validated (kWh)", "Grid.energy_kWh.offtake_invoice (kWh)"),
+        ("Grid.energy_kWh.injection_invoice_validated (kWh)", "Grid.energy_kWh.injection_invoice (kWh)"),
+    )
+    availability = []
+    missing_indices = []
+    for validated_name, raw_name in field_pairs:
+        if validated_name in history_df:
+            present = history_df[validated_name].notna()
+        else:
+            present = pd.Series(False, index=history_df.index)
+        if fallback and raw_name in history_df:
+            present = present | history_df[raw_name].notna()
+        availability.append(present)
+        missing_indices.extend(history_df.index[~present].tolist())
+
+    total = len(history_df) * len(field_pairs)
+    completeness = sum(int(mask.sum()) for mask in availability) / total if total else 0.0
+    threshold = float(RULES["realtime"]["min_completeness_pct"]) / 100
+    unique_missing = list(dict.fromkeys(missing_indices))
+    return completeness >= threshold, completeness, unique_missing
+
+
 def _check_signs(history_df: pd.DataFrame) -> Tuple[bool, List[int]]:
-    """Проверка знаков (энергия ≥ 0, CA выдачи ≤ 0).
-    
-    Args:
-        history_df: DataFrame с историческими данными.
-        
-    Returns:
-        Кортеж (пройдена ли проверка, список индексов нарушений).
-    """
+    """Check non-missing energy and CA injection-power signs."""
     if history_df.empty:
         return False, []
-    
-    violations = []
-    
-    # Проверка знаков энергии
-    energy_violations = history_df[history_df["energy_kWh"] < 0].index.tolist()
-    violations.extend(energy_violations)
-    
-    # Проверка знаков CA выдачи
-    ca_violations = history_df[history_df["ca_kwh"] > 0].index.tolist()
-    violations.extend(ca_violations)
-    
-    passed = len(violations) == 0
-    return passed, violations
+
+    energy = pd.to_numeric(history_df["energy_kWh"], errors="coerce")
+    ca_injection = pd.to_numeric(history_df["ca_injection_kW"], errors="coerce")
+    energy_bad = (energy < 0).fillna(False)
+    ca_bad = (ca_injection > 0).fillna(False)
+    violations = list(dict.fromkeys(
+        energy.index[energy_bad].tolist() + ca_injection.index[ca_bad].tolist()
+    ))
+    return not violations, violations
 
 
-def _check_units(history_df: pd.DataFrame) -> Tuple[bool, List[int]]:
-    """Проверка единиц измерения (E = P/4).
-    
-    Args:
-        history_df: DataFrame с историческими данными.
-        
-    Returns:
-        Кортеж (пройдена ли проверка, список индексов нарушений).
-    """
+def _check_units(history_df: pd.DataFrame) -> Tuple[bool, List[int], float]:
+    """Check that nonzero interval energy is approximately |power| / 4."""
     if history_df.empty:
-        return False, []
-    
-    # Проверка соотношения E/P
-    ratio = history_df["energy_kWh"] / history_df["power_kW"]
-    violations = ratio[ratio != 4].index.tolist()
-    
-    passed = len(violations) == 0
-    return passed, violations
+        return False, [], 0.0
+
+    energy = pd.to_numeric(history_df["energy_kWh"], errors="coerce")
+    power = pd.to_numeric(history_df["power_kW"], errors="coerce")
+    valid = (
+        energy.notna() & power.notna()
+        & np.isfinite(energy) & np.isfinite(power)
+        & (energy.abs() > 0) & (power.abs() > 0)
+    )
+    if not valid.any():
+        return False, [], 0.0
+
+    tolerance_rel = float(RULES["realtime"]["consistency_tol_rel"])
+    tolerance_abs = float(RULES["realtime"]["consistency_tol_abs_kwh"])
+    consistent = np.isclose(
+        energy.loc[valid].abs().to_numpy(dtype=float),
+        (power.loc[valid].abs() / 4).to_numpy(dtype=float),
+        rtol=tolerance_rel,
+        atol=tolerance_abs,
+    )
+    share = float(consistent.mean())
+    minimum_share = float(RULES["history"].get("unit_consistency_min_share", 0.85))
+    passed = share >= minimum_share
+    violations = energy.loc[valid].index[~consistent].tolist() if not passed else []
+    return passed, violations, share
 
 
 def _check_uniqueness(history_df: pd.DataFrame, object_id: str) -> Tuple[bool, List[int]]:
@@ -328,31 +366,46 @@ def stage1(I) -> List[Dict]:
         "next_action": "Добавить исторические данные" if not coverage_passed else None
     })
     
-    # Проверка 1.4: Полнота validated/raw
-    # Реализация пропущена для краткости
+    # Этапные проверки измерений относятся к настроенному 24-месячному окну.
+    history_window = _history_window(I.inv)
+
+    # Проверка 1.4: Полнота validated/raw с разрешённым fallback.
+    completeness_passed, completeness_share, incomplete_rows = _check_completeness(history_window)
+    completeness_threshold = float(RULES["realtime"]["min_completeness_pct"])
     checks.append({
         "id": "S1.4",
         "title": "Полнота validated/raw",
-        "summary": "Полнота валидированных данных ≥ 99%",
+        "summary": f"Полнота validated/raw: {completeness_share:.2%}; требуется ≥ {completeness_threshold:.0f}%",
         "mandatory": True,
-        "status": "pass",
+        "status": "pass" if completeness_passed else "fail",
         "evidence": {
             "source": "invoice.csv",
             "rules": RULES["version"],
             "checked_at": datetime.now(timezone.utc).isoformat(),
             "input_hash": I.hashes()[0]
         },
-        "obstacles": [],
-        "next_action": None
+        "obstacles": [
+            {
+                "check": "S1.4",
+                "reason": f"Нет validated/raw энергии для строки {idx}",
+                "field": "validated/raw energy",
+                "asset": I.passport["object_id"]
+            }
+            for idx in incomplete_rows[:20]
+        ] if not completeness_passed else [],
+        "next_action": "Заполнить пропуски validated/raw данными" if not completeness_passed else None
     })
-    
-    # Проверка 1.5: Знаки (энергия ≥ 0, CA выдачи ≤ 0)
-    signs_passed, signs_violations = _check_signs(I.inv)
-    
+
+    # Проверка 1.5: Знаки; пропуски и записи вне окна не считаются нарушением знака.
+    signs_passed, signs_violations = _check_signs(history_window)
+    energy_values = pd.to_numeric(history_window["energy_kWh"], errors="coerce")
+    ca_values = pd.to_numeric(history_window["ca_injection_kW"], errors="coerce")
+    energy_bad = (energy_values < 0).fillna(False)
+    ca_bad = (ca_values > 0).fillna(False)
     checks.append({
         "id": "S1.5",
         "title": "Знаки (энергия ≥ 0, CA выдачи ≤ 0)",
-        "summary": "Все значения энергии ≥ 0, все значения CA ≤ 0",
+        "summary": "Энергия ≥ 0, мощность CA выдачи ≤ 0 в расчётном окне",
         "mandatory": True,
         "status": "pass" if signs_passed else "fail",
         "evidence": {
@@ -364,32 +417,30 @@ def stage1(I) -> List[Dict]:
         "obstacles": [
             {
                 "check": "S1.5",
-                "reason": f"Некорректный знак энергии: {idx}: {row['energy_kWh']}",
+                "reason": f"Отрицательная энергия: {idx}",
                 "field": "energy_kWh",
                 "asset": I.passport["object_id"]
             }
-            for idx, row in I.inv.iterrows()
-            if not (0 <= row["energy_kWh"])
+            for idx in history_window.index[energy_bad]
         ] + [
             {
                 "check": "S1.5",
-                "reason": f"Некорректный знак CA: {idx}: {row['ca_kwh']}",
-                "field": "ca_kwh",
+                "reason": f"Положительная мощность CA выдачи: {idx}",
+                "field": "ca_injection_kW",
                 "asset": I.passport["object_id"]
             }
-            for idx, row in I.inv.iterrows()
-            if not (row["ca_kwh"] <= 0)
+            for idx in history_window.index[ca_bad]
         ],
         "next_action": "Исправить знаки" if signs_violations else None
     })
-    
-    # Проверка 1.6: Единицы и выбросы (E = P/4)
-    units_passed, units_violations = _check_units(I.inv)
-    
+
+    # Проверка 1.6: единицы E ≈ |P|/4 по ненулевым интервалам.
+    units_passed, units_violations, units_share = _check_units(history_window)
+    units_threshold = float(RULES["history"].get("unit_consistency_min_share", 0.85))
     checks.append({
         "id": "S1.6",
         "title": "Единицы и выбросы (E = P/4)",
-        "summary": "Соотношение энергии и мощности должно быть 4",
+        "summary": f"Соотношение E≈|P|/4: {units_share:.1%} ненулевых интервалов; требуется ≥ {units_threshold:.0%}",
         "mandatory": True,
         "status": "pass" if units_passed else "fail",
         "evidence": {
@@ -401,15 +452,15 @@ def stage1(I) -> List[Dict]:
         "obstacles": [
             {
                 "check": "S1.6",
-                "reason": f"Нарушение единиц измерения: строка {idx}",
-                "field": "energy_kWh",
+                "reason": f"Несоответствие E≈|P|/4: {idx}",
+                "field": "energy_kWh/power_kW",
                 "asset": I.passport["object_id"]
             }
-            for idx in units_violations
+            for idx in units_violations[:20]
         ],
-        "next_action": "Исправить единицы измерения" if units_violations else None
+        "next_action": "Проверить единицы и выбросы" if not units_passed else None
     })
-    
+
     # Проверка 1.7: Уникальность истории среди объектов
     uniqueness_passed, uniqueness_violations = _check_uniqueness(I.inv, I.passport["object_id"])
     
@@ -491,9 +542,13 @@ def stage2(I) -> List[Dict]:
         ]
     
     # Проверка 2.1: Сигналы по паспорту (актив + конкретные колонки)
-    required_signals = I.passport.get("signals", [])
+    required_signals = list(I.passport.get("signals", I.passport.get("site_signals", [])) or [])
+    for asset in I.passport.get("assets", []) or []:
+        if isinstance(asset, dict):
+            required_signals.extend(asset.get("signals", []) or [])
+    required_signals = list(dict.fromkeys(required_signals))
     available_signals = list(I.tel.columns) if I.tel is not None else []
-    
+
     missing_signals = [sig for sig in required_signals if sig not in available_signals]
     
     checks.append({
@@ -538,33 +593,44 @@ def stage2(I) -> List[Dict]:
         "next_action": None
     })
     
-    # Проверка 2.3: Актуальность ≤ 30 мин
+    # Проверка 2.3: актуальность относительно фиксированной точки проверки.
     if I.tel is not None and not I.tel.empty:
-        latest_time = pd.to_datetime(I.tel.index.max())
-        now = pd.Timestamp.now(timezone.utc)
-        age = (now - latest_time).total_seconds() / 60  # в минутах
-        
+        reference_time = pd.to_datetime(RULES["check_point_utc"], utc=True)
+        telemetry_times = pd.to_datetime(I.tel.index, utc=True)
+        available_times = telemetry_times[telemetry_times <= reference_time]
+        max_age = float(RULES["realtime"]["max_age_min"])
+        if len(available_times):
+            latest_time = available_times.max()
+            age = (reference_time - latest_time).total_seconds() / 60
+            fresh = 0 <= age <= max_age
+            summary = f"Последнее обновление до точки проверки: {latest_time}, возраст: {age:.1f} мин"
+            reason = f"Возраст данных {age:.1f} мин вне диапазона 0–{max_age:.0f} мин"
+        else:
+            latest_time = None
+            age = None
+            fresh = False
+            summary = f"Нет данных не позже точки проверки {reference_time}"
+            reason = "Нет телеметрии на момент точки проверки"
+
         checks.append({
             "id": "S2.3",
             "title": "Актуальность ≤ 30 мин",
-            "summary": f"Последнее обновление: {latest_time}, возраст: {age:.1f} мин",
+            "summary": summary,
             "mandatory": True,
-            "status": "pass" if age <= 30 else "fail",
+            "status": "pass" if fresh else "fail",
             "evidence": {
                 "source": "telemetry.csv",
                 "rules": RULES["version"],
                 "checked_at": datetime.now(timezone.utc).isoformat(),
                 "input_hash": I.hashes()[1]
             },
-            "obstacles": [
-                {
-                    "check": "S2.3",
-                    "reason": f"Возраст данных {age:.1f} мин > 30 мин",
-                    "field": "timestamp",
-                    "asset": I.passport["object_id"]
-                }
-            ],
-            "next_action": "Обновить телеметрию" if age > 30 else None
+            "obstacles": [] if fresh else [{
+                "check": "S2.3",
+                "reason": reason,
+                "field": "timestamp",
+                "asset": I.passport["object_id"]
+            }],
+            "next_action": None if fresh else "Обновить телеметрию"
         })
     else:
         checks.append({
@@ -579,71 +645,205 @@ def stage2(I) -> List[Dict]:
                 "checked_at": datetime.now(timezone.utc).isoformat(),
                 "input_hash": I.hashes()[1]
             },
-            "obstacles": [
-                {
-                    "check": "S2.3",
-                    "reason": "Источник телеметрии недоступен",
-                    "field": "telemetry.csv",
-                    "asset": I.passport["object_id"]
-                }
-            ],
+            "obstacles": [{
+                "check": "S2.3",
+                "reason": "Источник телеметрии недоступен",
+                "field": "telemetry.csv",
+                "asset": I.passport["object_id"]
+            }],
             "next_action": "Подключить источник телеметрии" if I.tel is None else None
         })
-    
-    # Проверка 2.4: Полнота ≥ 99 % за 48 ч
-    # Реализация пропущена для краткости
+
+    # Проверка 2.4: полнота сигналов за последние 48 часов до точки проверки.
+    reference_time = pd.to_datetime(RULES["check_point_utc"], utc=True)
+    window_start = reference_time - pd.Timedelta(hours=float(RULES["realtime"]["window_hours"]))
+    expected_rows = int(float(RULES["realtime"]["window_hours"]) * 4) + 1
+    recent = I.tel.loc[(I.tel.index >= window_start) & (I.tel.index <= reference_time)].copy()
+    recent = recent.loc[~recent.index.duplicated(keep="last")]
+    completeness_signals = required_signals or [
+        column for column in I.tel.columns
+        if column != "timestamp" and pd.api.types.is_numeric_dtype(I.tel[column])
+    ]
+    valid_cells = sum(
+        int(recent[signal].notna().sum()) if signal in recent.columns else 0
+        for signal in completeness_signals
+    )
+    total_cells = expected_rows * len(completeness_signals)
+    telemetry_completeness = valid_cells / total_cells if total_cells else 0.0
+    minimum_completeness = float(RULES["realtime"]["min_completeness_pct"]) / 100
+    completeness_passed = telemetry_completeness >= minimum_completeness
+    missing_cells = max(0, total_cells - valid_cells)
     checks.append({
         "id": "S2.4",
         "title": "Полнота ≥ 99 % за 48 ч",
-        "summary": "Полнота телеметрических данных за последние 48 часов",
+        "summary": f"Полнота сигналов до {reference_time}: {telemetry_completeness:.2%}; требуется ≥ {minimum_completeness:.0%}",
         "mandatory": True,
-        "status": "pass",
+        "status": "pass" if completeness_passed else "fail",
         "evidence": {
             "source": "telemetry.csv",
             "rules": RULES["version"],
             "checked_at": datetime.now(timezone.utc).isoformat(),
             "input_hash": I.hashes()[1]
         },
-        "obstacles": [],
-        "next_action": None
+        "obstacles": [] if completeness_passed else [{
+            "check": "S2.4",
+            "reason": f"Не хватает {missing_cells} значений сигналов в окне 48 ч",
+            "field": "telemetry.csv",
+            "asset": I.passport["object_id"]
+        }],
+        "next_action": None if completeness_passed else "Восстановить пропущенные сигналы телеметрии"
     })
-    
-    # Проверка 2.5: Правдоподобие (PV ≥ 0, SoC 0–100 %, заглушки 9999, E≈P/4 по знакам)
-    # Реализация пропущена для краткости
+
+    # Проверка 2.5: диапазоны значений, заглушки и направление Grid.power.
+    plausibility_obstacles = []
+    sentinels = set(RULES["realtime"].get("sentinels", []))
+    soc_min, soc_max = RULES["realtime"].get("soc_range", [0, 100])
+    for column in I.tel.columns:
+        if column == "timestamp":
+            continue
+        values = pd.to_numeric(I.tel[column], errors="coerce")
+        sentinel_count = int(values.isin(sentinels).sum())
+        if sentinel_count:
+            plausibility_obstacles.append({
+                "check": "S2.5",
+                "reason": f"Сигнал {column}: значения-заглушки ({sentinel_count})",
+                "field": column,
+                "asset": I.passport["object_id"]
+            })
+        name = str(column).casefold()
+        present = values.notna()
+        if "soc" in name:
+            bad_soc = present & ((values < soc_min) | (values > soc_max))
+            if bad_soc.any():
+                plausibility_obstacles.append({
+                    "check": "S2.5",
+                    "reason": f"Сигнал {column}: значения вне диапазона {soc_min}–{soc_max}% ({int(bad_soc.sum())})",
+                    "field": column,
+                    "asset": I.passport["object_id"]
+                })
+        if "pv" in name and "setpoint" not in name and "control" not in name and ("power_kw" in name or "energy_kwh" in name):
+            negative_pv = present & (values < 0)
+            if negative_pv.any():
+                plausibility_obstacles.append({
+                    "check": "S2.5",
+                    "reason": f"Сигнал {column}: отрицательные значения ({int(negative_pv.sum())})",
+                    "field": column,
+                    "asset": I.passport["object_id"]
+                })
+
+    grid_power_column = "Grid.power_kW (kW)" if "Grid.power_kW (kW)" in I.tel.columns else None
+    if grid_power_column is not None and I.inv is not None and "power_kW" in I.inv:
+        telemetry_power = pd.to_numeric(I.tel[grid_power_column], errors="coerce")
+        invoice_power = pd.to_numeric(I.inv["power_kW"], errors="coerce")
+        telemetry_power = telemetry_power.loc[~telemetry_power.index.duplicated(keep="last")]
+        invoice_power = invoice_power.loc[~invoice_power.index.duplicated(keep="last")]
+        paired_power = pd.concat(
+            [telemetry_power.rename("telemetry"), invoice_power.rename("invoice")],
+            axis=1,
+            sort=False,
+        ).dropna()
+        paired_power = paired_power[
+            (paired_power["telemetry"].abs() > 1e-9)
+            & (paired_power["invoice"].abs() > 1e-9)
+        ]
+        sign_share = (
+            float((np.sign(paired_power["telemetry"]) == np.sign(paired_power["invoice"])).mean())
+            if not paired_power.empty else 0.0
+        )
+        sign_threshold = float(RULES["realtime"].get("consistency_min_share", 0.85))
+        if sign_share < sign_threshold:
+            plausibility_obstacles.append({
+                "check": "S2.5",
+                "reason": f"Знак Grid.power не совпадает с учётом в {sign_share:.1%} пар; требуется ≥ {sign_threshold:.0%}",
+                "field": grid_power_column,
+                "asset": I.passport["object_id"]
+            })
+
+    plausibility_passed = not plausibility_obstacles
     checks.append({
         "id": "S2.5",
         "title": "Правдоподобие (PV ≥ 0, SoC 0–100 %, заглушки 9999, E≈P/4 по знакам)",
-        "summary": "Проверка правдоподобия значений телеметрии",
+        "summary": "Проверка диапазонов, заглушек и знака мощности Grid" if plausibility_passed else f"Найдено нарушений правдоподобия: {len(plausibility_obstacles)}",
         "mandatory": True,
-        "status": "pass",
+        "status": "pass" if plausibility_passed else "fail",
         "evidence": {
             "source": "telemetry.csv",
             "rules": RULES["version"],
             "checked_at": datetime.now(timezone.utc).isoformat(),
             "input_hash": I.hashes()[1]
         },
-        "obstacles": [],
-        "next_action": None
+        "obstacles": plausibility_obstacles,
+        "next_action": None if plausibility_passed else "Проверить диапазоны сигналов и знак Grid.power"
     })
-    
-    # Проверка 2.6: Согласованность с учётом (корреляция, сдвиг зоны, чужой объект)
-    # Реализация пропущена для краткости
+
+    # Проверка 2.6: привязка телеметрии к учёту по общему сигналу потребления.
+    binding_column = "Grid.energy_kWh.offtake (kWh)" if "Grid.energy_kWh.offtake (kWh)" in I.tel.columns else None
+    if I.inv is None or binding_column is None or "energy_kWh" not in I.inv:
+        binding_status = "unavailable"
+        binding_summary = "Нет парных данных учёта и телеметрии для проверки привязки"
+        binding_obstacles = [{
+            "check": "S2.6",
+            "reason": "Нет общего сигнала Grid.energy_kWh.offtake",
+            "field": "Grid.energy_kWh.offtake (kWh)",
+            "asset": I.passport["object_id"]
+        }]
+    else:
+        binding_start = reference_time - pd.Timedelta(hours=float(RULES["realtime"]["window_hours"]))
+        telemetry_energy = pd.to_numeric(I.tel[binding_column], errors="coerce")
+        invoice_energy = pd.to_numeric(I.inv["energy_kWh"], errors="coerce")
+        telemetry_energy = telemetry_energy.loc[~telemetry_energy.index.duplicated(keep="last")]
+        invoice_energy = invoice_energy.loc[~invoice_energy.index.duplicated(keep="last")]
+        pair = pd.concat(
+            [telemetry_energy.rename("telemetry"), invoice_energy.rename("invoice")],
+            axis=1,
+            sort=False,
+        ).dropna()
+        # История учёта в кейсе заканчивается раньше точки проверки. Проверяем
+        # 48 часов последних общих валидных измерений; S2.3 независимо проверяет
+        # свежесть самой телеметрии относительно точки проверки.
+        pair = pair.loc[pair.index <= reference_time]
+        pair_end = pair.index.max() if not pair.empty else None
+        if pair_end is not None:
+            binding_start = pair_end - pd.Timedelta(hours=float(RULES["realtime"]["window_hours"]))
+            pair = pair.loc[pair.index >= binding_start]
+        expected_pairs = int(float(RULES["realtime"]["window_hours"]) * 4) + 1
+        minimum_share = float(RULES["realtime"].get("min_completeness_pct", 99)) / 100
+        enough_pairs = len(pair) >= int(np.ceil(expected_pairs * minimum_share))
+        correlation = float(pair["telemetry"].corr(pair["invoice"])) if len(pair) >= 3 else float("nan")
+        minimum_correlation = float(RULES["realtime"].get("binding_min_corr", 0.95))
+        binding_passed = enough_pairs and np.isfinite(correlation) and correlation >= minimum_correlation
+        binding_status = "pass" if binding_passed else "fail"
+        if np.isfinite(correlation):
+            binding_summary = (
+                f"Корреляция учёта и телеметрии r={correlation:.3f} по {len(pair)}/{expected_pairs} пар "
+                f"за последние {RULES['realtime']['window_hours']} ч доступной общей истории; "
+                f"требуется ≥ {minimum_correlation:.2f} и полнота ≥ {minimum_share:.0%}"
+            )
+        else:
+            binding_summary = f"Недостаточно парных точек: {len(pair)}/{expected_pairs}"
+        binding_obstacles = [] if binding_passed else [{
+            "check": "S2.6",
+            "reason": binding_summary,
+            "field": binding_column,
+            "asset": I.passport["object_id"]
+        }]
+
     checks.append({
         "id": "S2.6",
-        "title": "Согласованность с учётом (корреляция, сдвиг зоны, чужой объект)",
-        "summary": "Корреляция телеметрии с историческими данными",
+        "title": "Согласованность с учётом",
+        "summary": binding_summary,
         "mandatory": True,
-        "status": "pass",
+        "status": binding_status,
         "evidence": {
-            "source": "telemetry.csv",
+            "source": "telemetry.csv + invoice.csv",
             "rules": RULES["version"],
             "checked_at": datetime.now(timezone.utc).isoformat(),
             "input_hash": I.hashes()[1]
         },
-        "obstacles": [],
-        "next_action": None
+        "obstacles": binding_obstacles,
+        "next_action": None if binding_status == "pass" else "Проверить привязку телеметрии к объекту"
     })
-    
+
     return checks
 
 
@@ -676,22 +876,28 @@ def stage3(I) -> List[Dict]:
         "next_action": None
     })
     
-    # Проверка 3.2: Тест контура на имитаторе (команда, приём, отклик)
-    # Реализация пропущена для краткости
+    # Проверка 3.2: Тест контура на имитаторе (команда, приём, отклик).
+    mode = get_simulation_mode(I)
+    simulation_passed = mode != "no_response"
     checks.append({
         "id": "S3.2",
         "title": "Тест контура на имитаторе (команда, приём, отклик)",
-        "summary": "Тестовый контур управления (только имитатор)",
+        "summary": "Имитатор подтвердил команду и отклик" if simulation_passed else "Имитатор принял команду, но не вернул отклик",
         "mandatory": True,
-        "status": "pass",
+        "status": "pass" if simulation_passed else "fail",
         "evidence": {
             "source": "simulator",
             "rules": RULES["version"],
             "checked_at": datetime.now(timezone.utc).isoformat(),
             "input_hash": I.hashes()[2]
         },
-        "obstacles": [],
-        "next_action": None
+        "obstacles": [] if simulation_passed else [{
+            "check": "S3.2",
+            "reason": "Нет отклика от имитатора после команды",
+            "field": "simulator.response",
+            "asset": I.passport["object_id"]
+        }],
+        "next_action": None if simulation_passed else "Проверить тестовый контур управления"
     })
     
     return checks
@@ -786,60 +992,110 @@ def stage4(I) -> List[Dict]:
         "next_action": "Добавить отсутствующие блоки" if missing_blocks else None
     })
     
-    # Проверка 4.3: Привязка блоков к объекту
-    # Реализация пропущена для краткости
+    # Проверка 4.3: привязка каждого блока к текущему объекту.
+    blocks = dashboard.get("blocks", [])
+    if isinstance(blocks, dict):
+        block_items = [
+            {"id": block_id, **(block if isinstance(block, dict) else {})}
+            for block_id, block in blocks.items()
+        ]
+    else:
+        block_items = [block for block in blocks if isinstance(block, dict)]
+    wrong_bindings = []
+    for block in block_items:
+        block_id = block.get("id", block.get("key", "unknown"))
+        object_id = block.get("object_id")
+        data_source = str(block.get("data_source", ""))
+        if object_id != I.passport["object_id"] or not data_source.startswith(f"{I.passport['object_id']}/"):
+            wrong_bindings.append((block_id, object_id, data_source))
     checks.append({
         "id": "S4.3",
         "title": "Привязка блоков к объекту",
-        "summary": "Все блоки дашборда привязаны к текущему объекту",
+        "summary": "Все блоки привязаны к текущему объекту" if not wrong_bindings else f"Неправильных привязок блоков: {len(wrong_bindings)}",
         "mandatory": True,
-        "status": "pass",
+        "status": "pass" if not wrong_bindings else "fail",
         "evidence": {
             "source": "dashboard_template.html",
             "rules": RULES["version"],
             "checked_at": datetime.now(timezone.utc).isoformat(),
-            "input_hash": I.hashes()[3]
+            "input_hash": I.hashes()[4]
         },
-        "obstacles": [],
-        "next_action": None
+        "obstacles": [{
+            "check": "S4.3",
+            "reason": f"Блок {block_id} привязан к другому объекту или источнику данных",
+            "field": f"blocks.{block_id}",
+            "asset": I.passport["object_id"]
+        } for block_id, _, _ in wrong_bindings],
+        "next_action": "Перепривязать блоки к текущему объекту" if wrong_bindings else None
     })
-    
-    # Проверка 4.4: Права (оператор — read, без публичного доступа)
-    # Реализация пропущена для краткости
+
+    # Проверка 4.4: оператор только для чтения, публичный доступ закрыт.
+    acl = dashboard.get("acl", {})
+    principals = acl.get("principals", {}) if isinstance(acl, dict) else {}
+    operator_permissions = principals.get("operator", []) if isinstance(principals, dict) else []
+    if isinstance(operator_permissions, str):
+        operator_permissions = [operator_permissions]
+    acl_valid = "read" in operator_permissions and "write" not in operator_permissions and not acl.get("public", False)
     checks.append({
         "id": "S4.4",
         "title": "Права (оператор — read, без публичного доступа)",
-        "summary": "Права доступа: оператор — read, публичный доступ запрещён",
+        "summary": "Публичный доступ закрыт; оператору оставлено только чтение" if acl_valid else "Права оператора или публичный доступ не соответствуют правилам",
         "mandatory": True,
-        "status": "pass",
+        "status": "pass" if acl_valid else "fail",
         "evidence": {
             "source": "dashboard_template.html",
             "rules": RULES["version"],
             "checked_at": datetime.now(timezone.utc).isoformat(),
-            "input_hash": I.hashes()[3]
+            "input_hash": I.hashes()[4]
         },
-        "obstacles": [],
-        "next_action": None
+        "obstacles": [] if acl_valid else [{
+            "check": "S4.4",
+            "reason": "Оператор должен иметь только read, а public должен быть false",
+            "field": "acl",
+            "asset": I.passport["object_id"]
+        }],
+        "next_action": None if acl_valid else "Ограничить права доступа к дашборду"
     })
-    
-    # Проверка 4.5: Приёмка ответственным
-    # Реализация пропущена для краткости
+
+    # Проверка 4.5: приёмка ответственным подтверждается хэшем конфигурации.
+    acceptance = I.accept if isinstance(I.accept, dict) else None
+    current_dashboard_hash = I.hashes()[4]
+    if acceptance is None:
+        acceptance_status = "pending"
+        acceptance_summary = "Ожидает приёмки ответственным"
+        acceptance_obstacles = []
+        acceptance_next = "Ожидает приёмки ответственным"
+    elif acceptance.get("dash_hash") != current_dashboard_hash:
+        acceptance_status = "fail"
+        acceptance_summary = "Конфигурация дашборда изменилась после приёмки"
+        acceptance_obstacles = [{
+            "check": "S4.5",
+            "reason": acceptance_summary,
+            "field": "dashboard_hash",
+            "asset": I.passport["object_id"]
+        }]
+        acceptance_next = "Повторить приёмку после проверки изменений"
+    else:
+        acceptance_status = "pass"
+        acceptance_summary = f"Принято: {acceptance.get('by', 'ответственный')}"
+        acceptance_obstacles = []
+        acceptance_next = None
     checks.append({
         "id": "S4.5",
         "title": "Приёмка ответственным",
-        "summary": "Дашборды приняты ответственным лицом",
+        "summary": acceptance_summary,
         "mandatory": True,
-        "status": "pending",
+        "status": acceptance_status,
         "evidence": {
             "source": "manual",
             "rules": RULES["version"],
             "checked_at": datetime.now(timezone.utc).isoformat(),
-            "input_hash": I.hashes()[3]
+            "input_hash": current_dashboard_hash
         },
-        "obstacles": [],
-        "next_action": "Ожидает приёмки ответственным"
+        "obstacles": acceptance_obstacles,
+        "next_action": acceptance_next
     })
-    
+
     return checks
 
 
