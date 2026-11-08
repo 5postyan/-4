@@ -167,7 +167,7 @@ class Inputs:
             "ean": ("ean", "ean_code", "ean_number"),
             "value": ("value", "Grid.energy_kWh.offtake_invoice (kWh)", "energy_kWh"),
             "energy_kWh": ("energy_kWh", "Grid.energy_kWh.offtake_invoice (kWh)", "value"),
-            "ca_kwh": ("ca_kwh", "ca_energy_kWh", "Grid.energy_kWh.injection_invoice (kWh)"),
+            "ca_injection_kW": ("ca_injection_kW", "Grid.power_kW.CA_injection (kW)"),
             "power_kW": ("power_kW", "Grid.power_kW.invoice (kW)", "Grid.power_kW (kW)"),
         }
         object_ean = self.passport.get("ean") or self.passport.get("EAN")
@@ -184,7 +184,7 @@ class Inputs:
             elif target == "ean" and object_ean is not None:
                 self.inv[target] = object_ean
 
-        required = ("ean", "value", "energy_kWh", "ca_kwh", "power_kW")
+        required = ("ean", "value", "energy_kWh", "ca_injection_kW", "power_kW")
         missing = [name for name in required if name not in self.inv.columns]
         if missing:
             raise ValueError("invoice.csv is missing required field(s): " + ", ".join(missing))
@@ -204,4 +204,5 @@ class Inputs:
         combined = _stable_hash([history, telemetry, control, dashboard])
         # Index 0 is the aggregate; stages 1–4 use the remaining hashes.
         return [combined, history, telemetry, control, dashboard]
+
 
