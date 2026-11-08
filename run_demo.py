@@ -95,7 +95,7 @@ if DEMO_INPUTS_READY:
     I3 = base.clone(); I3.inv = pd.concat([I3.inv, I3.inv.iloc[1000:1004]]); I3.inv.iloc[5000:5040, I3.inv.columns.get_loc("Grid.energy_kWh.offtake_invoice (kWh)")] = float("nan"); I3.inv.iloc[5000:5040, I3.inv.columns.get_loc("Grid.energy_kWh.offtake_invoice_validated (kWh)")] = float("nan")
     add(3, "Дефекты истории (дубли, пропуски)", [B, P, N, N], I3)
     I4 = base.clone(); I4.passport["assets"].append({"asset_id": "Battery", "type": "battery", "signals": ["Battery.power_kW (kW)", "Battery.SOC_% (%)", "Battery.power_kW.setpoint_received (kW)"]})
-    add(4, "Нет телеметрии актива (батарея)", [C, B, N, N], I4, extra=lambda L_, r: r["stages"][1]["obstacles"][0].get("signals"))
+    add(4, "Нет телеметрии актива (батарея)", [C, B, N, N], I4, extra=lambda L_, r: [ob.get("reason") for ob in r["stages"][1]["obstacles"] if ob.get("check") == "S2.1"])
     if objs["building_5"].tel is not None and "Grid.energy_kWh.offtake (kWh)" in objs["building_5"].tel:
         I5 = base.clone(); I5.tel = I5.tel.copy(); I5.tel["Grid.energy_kWh.offtake (kWh)"] = objs["building_5"].tel["Grid.energy_kWh.offtake (kWh)"].reindex(I5.tel.index).values
         add(5, "Ошибочная привязка (телеметрия другого объекта)", [C, B, N, N], I5)
@@ -145,6 +145,7 @@ print("метрики:", METRICS)
 print("журнал building_2:", len(L.journal), "записей")
 
 logger.info("Demo complete objects=%d scenarios=%d run_time_sec=%.3f", len(objs), len(SC), overview_sec)
+
 
 
 
