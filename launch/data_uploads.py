@@ -78,6 +78,10 @@ def prepare_data_workspace(base_dir: Path, upload_dir: Path, runtime_dir: Path, 
             for filename in ALLOWED_FILES.values():
                 uploaded = building_dir / filename
                 if uploaded.is_file():
+                    source = base / building_dir.name / filename
+                    if source.is_file() and source.stat().st_mtime_ns > uploaded.stat().st_mtime_ns:
+                        # A newer file replaced directly in data/ wins over an older saved upload.
+                        continue
                     shutil.copy2(uploaded, target_dir / filename)
     try:
         if working.exists():
