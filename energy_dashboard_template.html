@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Энергобаланс объектов</title>
+<style>
+:root{--bg:#e5ecf0;--card:#f8fbfc;--ink:#0c2231;--mut:#53697a;--line:#cfdbe2;--buy:#d9501f;--buy-t:#fbe3da;--sell:#07907b;--sell-t:#d6f1ec;--ok:#1b6e45;--bad:#a8322b;--ns:#9fb0ba;
+  --sans:"Bahnschrift","Segoe UI Variable Display","Segoe UI",system-ui,-apple-system,Roboto,Arial,sans-serif;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b1820;--card:#112530;--ink:#e6f0f5;--mut:#8ea6b4;--line:#22414f;--buy:#ff7a4d;--buy-t:#3a2218;--sell:#2fd1b6;--sell-t:#0f3a35;--ok:#6fd49b;--bad:#ff8f84;--ns:#4a6676}}
+:root[data-theme="dark"]{--bg:#0b1820;--card:#112530;--ink:#e6f0f5;--mut:#8ea6b4;--line:#22414f;--buy:#ff7a4d;--buy-t:#3a2218;--sell:#2fd1b6;--sell-t:#0f3a35;--ok:#6fd49b;--bad:#ff8f84;--ns:#4a6676}
+*{box-sizing:border-box}html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 var(--sans);font-variant-numeric:tabular-nums;-webkit-font-smoothing:antialiased}
+:focus-visible{outline:3px solid var(--sell);outline-offset:3px;border-radius:10px}
+main{max-width:1280px;margin:0 auto;padding:28px 22px 56px}
+.mut{color:var(--mut);font-size:13px}
+
+/* hero */
+.hero{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:28px;align-items:end;margin-bottom:26px}
+h1{margin:0;font-size:clamp(30px,5vw,54px);line-height:1.02;letter-spacing:-.035em;font-weight:700}
+.hero p{margin:12px 0 0;max-width:46ch;color:var(--mut)}
+.fleet{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.fleet div{padding:14px 16px;border-radius:14px;background:var(--card);border:1px solid var(--line)}
+.fleet small{display:block;color:var(--mut);font-size:12.5px}
+.fleet b{display:block;font-size:clamp(22px,3vw,32px);letter-spacing:-.02em;line-height:1.15}
+.fleet .b b{color:var(--buy)}.fleet .s b{color:var(--sell)}
+
+/* cards */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,370px),1fr));gap:16px}
+.card{all:unset;box-sizing:border-box;display:flex;flex-direction:column;gap:14px;cursor:pointer;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:20px;position:relative;overflow:hidden;transition:transform .25s cubic-bezier(.2,.8,.2,1),box-shadow .25s,border-color .2s}
+.card:hover{transform:translateY(-4px);box-shadow:0 14px 34px #0a24372e;border-color:var(--sell)}
+.card:focus-visible{outline:3px solid var(--sell);outline-offset:3px}
+.card.sel{border-color:var(--sell);box-shadow:0 0 0 2px var(--sell)}
+.top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.top b{font-size:20px;letter-spacing:-.015em}
+.pips{display:flex;gap:4px;padding-top:6px}
+.pips i{width:16px;height:6px;border-radius:3px;background:var(--ns)}
+.pips i.completed{background:var(--ok)}.pips i.in_progress{background:#c28a00}.pips i.blocked{background:var(--bad)}
+.nums{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.nums small{display:block;font-size:12.5px;color:var(--mut)}
+.nums b{display:block;font-size:clamp(22px,2.4vw,28px);letter-spacing:-.025em;line-height:1.1;margin-top:2px}
+.nums .b b{color:var(--buy)}.nums .s b{color:var(--sell)}
+.nums u{text-decoration:none;font-size:12px;color:var(--mut);font-weight:500}
+
+/* flow bar */
+.flow{display:flex;height:12px;border-radius:7px;overflow:hidden;background:var(--line)}
+.flow i{display:block;height:100%;width:0;transition:width 1.1s cubic-bezier(.2,.8,.2,1)}
+.flow .b{background:repeating-linear-gradient(115deg,var(--buy) 0 9px,color-mix(in srgb,var(--buy) 70%,#fff) 9px 18px);background-size:36px 100%;animation:run 1.6s linear infinite}
+.flow .s{background:repeating-linear-gradient(65deg,var(--sell) 0 9px,color-mix(in srgb,var(--sell) 70%,#fff) 9px 18px);background-size:36px 100%;animation:run 2.2s linear infinite reverse}
+@keyframes run{to{background-position:36px 0}}
+.flowl{display:flex;justify-content:space-between;font-size:12.5px;color:var(--mut);margin-top:-6px}
+
+/* sparkline */
+.spark{width:100%;height:54px;display:block}
+.spark path{fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:1;stroke-dashoffset:1;transition:stroke-dashoffset 1.6s cubic-bezier(.3,.7,.2,1)}
+.go .spark path{stroke-dashoffset:0}
+.foot{display:flex;flex-wrap:wrap;gap:6px;font-size:12px;color:var(--mut)}
+.tag{padding:2px 9px;border-radius:999px;background:var(--bg);border:1px solid var(--line)}
+.tag.warn{color:var(--bad);border-color:var(--bad)}
+
+/* detail */
+.detail{margin-top:22px;background:var(--card);border:1px solid var(--line);border-radius:22px;padding:24px;animation:rise .45s cubic-bezier(.2,.8,.2,1)}
+@keyframes rise{from{opacity:0;transform:translateY(14px)}}
+.detail h2{margin:0;font-size:26px;letter-spacing:-.02em}
+.cols{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:26px;margin-top:18px}
+.legend{display:flex;gap:16px;font-size:13px;color:var(--mut);margin-bottom:8px}
+.legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;background:var(--c)}
+.bars{display:flex;align-items:flex-end;gap:3px;height:210px;border-bottom:1px solid var(--line);padding-top:6px}
+.col{flex:1;min-width:0;height:100%;display:flex;align-items:flex-end;gap:1px;position:relative}
+.col i{flex:1;border-radius:3px 3px 0 0;transform:scaleY(0);transform-origin:bottom;transition:transform .9s cubic-bezier(.2,.8,.2,1);transition-delay:calc(var(--i)*28ms);min-height:1px}
+.col .b{background:var(--buy)}.col .s{background:var(--sell)}
+.go .col i{transform:scaleY(1)}
+.col:hover i{filter:brightness(1.15)}
+.col em{display:none;position:absolute;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);background:var(--ink);color:var(--bg);font-style:normal;font-size:11.5px;padding:4px 8px;border-radius:7px;white-space:nowrap;z-index:2;pointer-events:none}
+.col:hover em{display:block}
+.axis{display:flex;gap:3px;font-size:10.5px;color:var(--mut);margin-top:4px}
+.axis span{flex:1;min-width:0;text-align:center;overflow:hidden}
+.rec{display:flex;flex-direction:column;gap:9px}
+.rec h3{margin:0 0 2px;font-size:15px}
+.row{display:flex;justify-content:space-between;gap:10px;padding:9px 12px;border-radius:11px;background:var(--bg)}
+.row b{font-weight:650}
+.empty{padding:14px;border:1px dashed var(--line);border-radius:12px;color:var(--mut);font-size:14px}
+.stg{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.chip{font-size:12px;padding:3px 10px;border-radius:999px;border:1px solid var(--line)}
+.chip.completed{color:var(--ok);border-color:var(--ok)}.chip.blocked{color:var(--bad);border-color:var(--bad)}
+.toolbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:0 0 14px}
+.toolbar button{border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;font-weight:600;font-size:14px;padding:8px 16px;border-radius:999px;cursor:pointer;transition:background .2s,border-color .2s}
+.toolbar button:hover{border-color:var(--bad)}.toolbar button[aria-pressed="true"]{background:var(--bad);border-color:var(--bad);color:#fff}
+.tag.err{color:#fff;background:var(--bad);border-color:var(--bad);font-weight:650}
+.card[hidden]{display:none}
+.iss{margin-top:28px}.iss h3{margin:0 0 4px;font-size:18px}
+.il{display:flex;flex-direction:column;gap:8px;margin-top:12px}
+.it{display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:4px 12px;padding:12px 14px;border-radius:13px;background:var(--bg);border-left:4px solid var(--c);opacity:0;transform:translateX(-10px);animation:slidein .45s cubic-bezier(.2,.8,.2,1) forwards;animation-delay:calc(var(--k)*55ms)}
+@keyframes slidein{to{opacity:1;transform:none}}
+.it.error{--c:var(--bad)}.it.warn{--c:#c28a00}
+.it .ic{width:24px;height:24px;border-radius:7px;display:grid;place-items:center;font-weight:800;font-size:13px;color:#fff;background:var(--c)}
+.it b{font-size:14.5px}.it .d{font-size:13px;color:var(--mut)}
+.it .n{font-size:13px;font-weight:700;color:var(--c);white-space:nowrap}
+.it .xs{grid-column:2/4;display:flex;gap:5px;flex-wrap:wrap;margin-top:3px}
+.it .xs code{font:12px ui-monospace,Consolas,monospace;background:var(--card);border:1px solid var(--line);padding:1px 7px;border-radius:6px}
+.it .src{font-size:11.5px;color:var(--mut);margin-left:8px;font-weight:500}
+.ok-box{margin-top:12px;padding:14px;border-radius:12px;background:var(--sell-t);color:var(--sell);font-weight:650}
+.note{margin-top:26px;font-size:12.5px;color:var(--mut);max-width:80ch}
+.upload-panel{margin:14px 0 22px;padding:14px 16px;border:1px solid var(--line);border-radius:16px;background:var(--card)}
+.upload-panel summary{cursor:pointer;font-weight:700;font-size:16px}.upload-panel summary::marker{color:var(--sell)}
+.upload-panel>p{margin:10px 0;color:var(--mut);font-size:13px}
+.upload-form{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:12px;align-items:end;margin-top:12px}
+.upload-form label{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--mut);font-weight:650}
+.upload-form select,.upload-form input{width:100%;min-height:40px;border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--bg);color:var(--ink);font:inherit;font-size:13px}
+.upload-form input[type=file]{padding:6px}.upload-form button{min-height:40px;border:0;border-radius:10px;padding:8px 14px;background:var(--sell);color:#fff;font:inherit;font-weight:700;cursor:pointer}
+.upload-form button:disabled{opacity:.55;cursor:wait}.upload-help{grid-column:1/-1;margin:0;color:var(--mut);font-size:12px}
+.upload-status{margin-top:10px;font-size:13px;font-weight:650}.upload-status.error{color:var(--bad)}.upload-status.success{color:var(--ok)}
+.upload-guide{margin-top:14px;padding:16px;border-radius:14px;background:linear-gradient(135deg,#102c39,#0d202b);border:1px solid #245262}
+.upload-guide h3{margin:0 0 6px;font-size:17px}.upload-guide>p{margin:0;color:var(--mut);font-size:13px}
+.upload-steps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:14px 0}
+.upload-step{padding:10px;border-radius:10px;background:rgba(255,255,255,.06);font-size:12px;color:var(--ink)}.upload-step b{display:block;color:var(--sell);font-size:16px;margin-bottom:3px}
+.bundle-form{display:flex;gap:10px;align-items:end;flex-wrap:wrap;margin-top:12px}.bundle-form label{display:flex;flex-direction:column;gap:5px;min-width:250px;flex:1;font-size:12px;color:var(--mut);font-weight:650}.bundle-form input{width:100%;min-height:42px;border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--bg);color:var(--ink);font:inherit}.bundle-form button{min-height:42px;border:0;border-radius:10px;padding:8px 18px;background:var(--sell);color:#fff;font:inherit;font-weight:750;cursor:pointer}.bundle-form button:disabled{opacity:.55;cursor:wait}
+.bundle-hint{margin:10px 0 0;color:var(--mut);font-size:12px}.advanced-upload{margin-top:14px}.advanced-upload summary{cursor:pointer;color:var(--mut);font-size:13px;font-weight:650}.advanced-upload .upload-form{margin-top:10px}
+
+@media(max-width:860px){.hero,.cols{grid-template-columns:1fr}}
+@media(prefers-reduced-motion:reduce){.it{opacity:1!important;transform:none!important}*{animation:none!important;transition:none!important}.flow i{width:var(--w)!important}.spark path,.col i{transition:none!important}}
+</style></head><body><main>
+<a class="back" href="index.html">← Карточка запуска</a>
+<section class="hero">
+  <div><h1>Энергобаланс объектов</h1><p>Сколько каждый объект потратил из сети и сколько продал обратно. По данным счетов за весь период и по телеметрии за последние недели.</p></div>
+  <div class="fleet" id="fleet"></div>
+</section>
+<details class="upload-panel">
+  <summary>Добавить данные объекта</summary>
+  <div class="upload-guide">
+    <h3>Добавьте файлы объекта вместе</h3>
+    <p>Выберите несколько файлов сразу в одном окне. Архив создавать не нужно.</p>
+    <div class="upload-steps">
+      <div class="upload-step"><b>1</b>Положите в одну папку <strong>object.json</strong>, <strong>invoice.csv</strong> и <strong>telemetry.csv</strong>.</div>
+      <div class="upload-step"><b>2</b>В окне выбора файлов отметьте все нужные файлы, удерживая Ctrl.</div>
+      <div class="upload-step"><b>3</b>Нажмите кнопку ниже. Программа создаст объект и пересчитает отчёты.</div>
+    </div>
+    <form class="bundle-form" id="bundle-form">
+      <label>Файлы объекта (object.json и CSV)<input id="bundle-file" type="file" accept=".json,.csv,application/json,text/csv" multiple required></label>
+      <button id="bundle-submit" type="submit">Добавить выбранные файлы</button>
+    </form>
+    <p class="bundle-hint">Нужен паспорт object.json. CSV можно добавить сейчас или позже. Исходные данные не изменяются.</p>
+    <div class="upload-status" id="bundle-status" role="status" aria-live="polite"></div>
+  </div>
+  <details class="advanced-upload">
+    <summary>Точечная загрузка одного файла (для исправлений)</summary>
+  <p>CSV можно дополнить новыми временными метками или заменить целиком. Исходная папка не изменяется.</p>
+  <form class="upload-form" id="upload-form">
+    <label>Объект<select id="upload-building" required></select></label>
+    <label id="new-object-wrap" hidden>Имя новой папки<input id="new-object-name" value="Building7" pattern="Building[0-9]+" autocomplete="off"></label>
+    <label>Файл данных<select id="upload-kind" required>
+      <option value="invoice">Счётчики — invoice.csv</option>
+      <option value="telemetry">Телеметрия — telemetry.csv</option>
+      <option value="object">Паспорт — object.json</option>
+    </select></label>
+    <label id="upload-mode-wrap">Действие<select id="upload-mode">
+      <option value="append">Добавить строки CSV</option>
+      <option value="replace">Заменить файл целиком</option>
+      <option value="create">Создать объект из паспорта</option>
+    </select></label>
+    <label>Файл<input id="upload-file" type="file" accept=".csv,text/csv" required></label>
+    <button id="upload-submit" type="submit">Загрузить и пересчитать</button>
+    <p class="upload-help" id="upload-help">Для добавления загрузите только новые строки с теми же заголовками и без повторяющихся меток времени.</p>
+  </form>
+  <div class="upload-status" id="upload-status" role="status" aria-live="polite"></div>
+  </details>
+</details>
+<div class="toolbar"><button id="onlyerr" aria-pressed="false">Только объекты с ошибками</button><span class="mut" id="errsum"></span></div>
+<div class="grid" id="grid"></div>
+<div id="detail"></div>
+<p class="note">Потрачено — энергия, полученная из сети (отбор по счёту, подтверждённые значения; где их нет — исходные). Продано — энергия, отданная в сеть. Отрицательные значения и явные выбросы исключены из сумм, подробности в блоке «Ошибки в данных». Статусы этапов запуска взяты из результатов проверки (results.json).</p>
+</main>
+<script>
+const E=__ENERGY__;
+const RU={completed:"Завершён",in_progress:"В работе",blocked:"Заблокирован",not_started:"Не начат"};
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const nf=(v,d=1)=>v.toLocaleString("ru-RU",{maximumFractionDigits:d,minimumFractionDigits:0});
+const still=matchMedia("(prefers-reduced-motion:reduce)").matches;
+function fmt(v){if(v==null)return "нет данных";const a=Math.abs(v);if(a>=1e6)return nf(v/1e6,2)+" ГВт·ч";if(a>=1e3)return nf(v/1e3,1)+" МВт·ч";return nf(v,0)+" кВт·ч"}
+function count(el,to){if(still||!to){el.textContent=fmt(to);return}const t0=performance.now(),D=1300;(function f(t){const k=Math.min(1,(t-t0)/D),e=1-Math.pow(1-k,4);el.textContent=fmt(to*e);if(k<1)requestAnimationFrame(f)})(t0)}
+let sel=null;
+const cnt=o=>{const e=(o.issues||[]).filter(x=>x.sev==="error").length;return{e,w:(o.issues||[]).length-e}};
+
+function spark(months){const n=months.length,mx=Math.max(1,...months.flatMap(m=>[m[1],m[2]]));
+  const p=i=>months.map((m,k)=>(k?"L":"M")+(k/(n-1||1)*300).toFixed(1)+" "+(50-m[i]/mx*46).toFixed(1)).join(" ");
+  return `<svg class="spark" viewBox="0 0 300 54" preserveAspectRatio="none" aria-hidden="true"><path pathLength="1" d="${p(1)}" stroke="var(--buy)"/><path pathLength="1" d="${p(2)}" stroke="var(--sell)"/></svg>`}
+
+function card(o,i){const h=o.hist,tot=h.offtake+h.injection||1,sh=h.injection/tot*100;
+  return `<button class="card" data-i="${i}" aria-pressed="false" aria-label="${esc(o.name)}: подробности">
+  <div class="top"><div><b>${esc(o.name)}</b><div class="mut">${esc(o.city||"адрес не заполнен")}</div></div><div class="pips" title="Этапы запуска">${o.stages.map(s=>`<i class="${s}"></i>`).join("")}</div></div>
+  <div class="nums"><div class="b"><small>Потрачено из сети</small><b data-c="${h.offtake}">0</b></div><div class="s"><small>Продано в сеть</small><b data-c="${h.injection}">0</b></div></div>
+  <div><div class="flow"><i class="b" data-w="${100-sh}" style="--w:${100-sh}%"></i><i class="s" data-w="${sh}" style="--w:${sh}%"></i></div></div>
+  <div class="flowl"><span>куплено ${nf(100-sh,0)}%</span><span>продано ${nf(sh,0)}%</span></div>
+  ${spark(h.months)}
+  <div class="foot"><span class="tag">${h.start} — ${h.end}</span>${o.pv?`<span class="tag">PV × ${o.pv}</span>`:""}${o.battery?`<span class="tag">батарей × ${o.battery}</span>`:""}${cnt(o).e?`<span class="tag err">ошибок: ${cnt(o).e}</span>`:""}${cnt(o).w?`<span class="tag warn">предупреждений: ${cnt(o).w}</span>`:""}${!cnt(o).e&&!cnt(o).w?`<span class="tag">ошибок нет</span>`:""}</div></button>`}
+
+function detail(o){const h=o.hist,r=o.recent,mx=Math.max(1,...h.months.flatMap(m=>[m[1],m[2]]));
+  const bars=h.months.map((m,k)=>`<div class="col" style="--i:${k}"><i class="b" style="height:${m[1]/mx*100}%"></i><i class="s" style="height:${m[2]/mx*100}%"></i><em>${m[0]}: куплено ${fmt(m[1])}, продано ${fmt(m[2])}</em></div>`).join("");
+  const ax=h.months.map((m,k)=>`<span>${k%3===0?m[0].slice(2).replace("-","/"):""}</span>`).join("");
+  const rows=r?[["Куплено у сети",r.offtake],["Продано в сеть",r.injection],["Потребление объекта",r.demand],["Выработка PV",r.pv],["Заряд батарей",r.charge],["Разряд батарей",r.discharge]].filter(x=>x[1]!=null).map(x=>`<div class="row"><span>${x[0]}</span><b>${fmt(x[1])}</b></div>`).join(""):"";
+  const net=h.injection-h.offtake;
+  return `<section class="detail" id="det"><h2>${esc(o.name)}${o.city?", "+esc(o.city):""}</h2>
+  <div class="mut">Баланс за период: ${net>=0?"продано больше, чем куплено, на ":"куплено больше, чем продано, на "}<b>${fmt(Math.abs(net))}</b></div>
+  <div class="cols"><div><div class="legend"><span style="--c:var(--buy)">Потрачено из сети</span><span style="--c:var(--sell)">Продано в сеть</span></div>
+  <div class="bars">${bars}</div><div class="axis">${ax}</div></div>
+  <div class="rec"><h3>${r?`Телеметрия, ${r.start} — ${r.end}`:"Телеметрия"}</h3>${rows||`<div class="empty">Для этого объекта нет файла телеметрии, доступны только данные счетов.</div>`}
+  <h3 style="margin-top:8px">Этапы запуска</h3><div class="stg">${o.stages.map((s,k)=>`<span class="chip ${s}">${k+1}. ${RU[s]}</span>`).join("")}</div></div></div>${issues(o)}</section>`}
+
+function issues(o){const L=[...(o.issues||[])].sort((a,b)=>(a.sev==="error"?0:1)-(b.sev==="error"?0:1)),c=cnt(o);
+  return `<div class="iss"><h3>Ошибки в данных</h3><div class="mut">${L.length?`Ошибок: ${c.e}, предупреждений: ${c.w}`:"Проверки пройдены"}</div>`+
+  (L.length?`<div class="il">`+L.map((x,k)=>`<div class="it ${x.sev}" style="--k:${k}"><span class="ic" aria-hidden="true">${x.sev==="error"?"✕":"!"}</span><div><b>${esc(x.title)}</b><span class="src">${esc(x.src)}</span><div class="d">${esc(x.detail)}</div></div><span class="n">${x.count!=null?"× "+nf(x.count,0):""}</span>${x.examples&&x.examples.length?`<div class="xs">${x.examples.map(t=>`<code>${esc(t)}</code>`).join("")}</div>`:""}</div>`).join("")+`</div>`:`<div class="ok-box">Ошибок и предупреждений не найдено</div>`)+`</div>`}
+
+function show(i,quiet){sel=i;document.querySelectorAll(".card").forEach(c=>{const on=+c.dataset.i===i;c.classList.toggle("sel",on);c.setAttribute("aria-pressed",on)});
+  const d=document.getElementById("detail");d.innerHTML=detail(E[i]);const s=d.firstElementChild;requestAnimationFrame(()=>requestAnimationFrame(()=>s.classList.add("go")));
+  if(!quiet)s.scrollIntoView({behavior:still?"auto":"smooth",block:"nearest"})}
+
+function init(){
+  const g=document.getElementById("grid");g.innerHTML=E.map(card).join("");
+  const B=E.reduce((a,o)=>a+o.hist.offtake,0),S=E.reduce((a,o)=>a+o.hist.injection,0);
+  document.getElementById("fleet").innerHTML=`<div class="b"><small>Потрачено, все объекты</small><b data-c="${B}">0</b></div><div class="s"><small>Продано, все объекты</small><b data-c="${S}">0</b></div>`;
+  document.querySelectorAll("[data-c]").forEach(el=>count(el,+el.dataset.c));
+  const cards=[...g.children];
+  const io=new IntersectionObserver(es=>es.forEach(x=>{if(x.isIntersecting){x.target.classList.add("go");x.target.querySelectorAll("[data-w]").forEach(f=>f.style.width=f.dataset.w+"%");io.unobserve(x.target)}}),{threshold:.15});
+  cards.forEach((c,k)=>{c.style.transitionDelay="0s";setTimeout(()=>io.observe(c),still?0:k*90)});
+  const tE=E.reduce((a,o)=>a+cnt(o).e,0),tW=E.reduce((a,o)=>a+cnt(o).w,0),bad=E.filter(o=>cnt(o).e).length;
+  document.getElementById("errsum").textContent=`Всего ошибок: ${tE}, предупреждений: ${tW}. Объектов с ошибками: ${bad} из ${E.length}`;
+  const ob=document.getElementById("onlyerr");ob.addEventListener("click",()=>{const on=ob.getAttribute("aria-pressed")!=="true";ob.setAttribute("aria-pressed",on);cards.forEach((c,k)=>c.hidden=on&&!cnt(E[k]).e)});
+  g.addEventListener("click",ev=>{const c=ev.target.closest(".card");if(c)show(+c.dataset.i)});
+  if(!E.length){document.getElementById("errsum").textContent="Объектов пока нет. Добавьте первый паспорт в форме выше.";return}
+  const big=E.reduce((m,o,i)=>o.hist.offtake+o.hist.injection>(E[m].hist.offtake+E[m].hist.injection)?i:m,0);
+  const pv=E.findIndex(o=>o.recent&&o.pv);show(pv>=0?pv:big,true)}
+function initBundleUpload(){
+  const form=document.getElementById("bundle-form"),file=document.getElementById("bundle-file"),status=document.getElementById("bundle-status"),button=document.getElementById("bundle-submit");
+  form.addEventListener("submit",async event=>{
+    event.preventDefault();
+    const selected=[...file.files];if(!selected.length){status.textContent="Сначала выберите файлы объекта.";status.className="upload-status error";return}
+    const names=selected.map(item=>item.name.toLowerCase());if(names.some(name=>!['object.json','invoice.csv','telemetry.csv'].includes(name))){status.textContent="Выберите только object.json, invoice.csv и telemetry.csv.";status.className="upload-status error";return}
+    if(new Set(names).size!==names.length){status.textContent="Файл выбран дважды. Оставьте по одному файлу каждого типа.";status.className="upload-status error";return}
+    const total=selected.reduce((sum,item)=>sum+item.size,0);if(total>128*1024*1024){status.textContent="Общий размер файлов больше 128 МБ.";status.className="upload-status error";return}
+    button.disabled=true;status.className="upload-status";status.textContent="Файлы проверяются, объект создаётся, отчёты пересчитываются…";
+    try{
+      const formData=new FormData();selected.forEach(item=>formData.append("files",item,item.name));
+      const response=await fetch("/api/upload-files",{method:"POST",body:formData});
+      const payload=await response.json();if(!response.ok||!payload.ok)throw new Error(payload.message||"Не удалось добавить комплект.");
+      status.textContent=payload.message;status.className="upload-status success";file.value="";setTimeout(()=>window.location.reload(),1500);
+    }catch(error){status.textContent=error.message||"Нет связи с приложением.";status.className="upload-status error"}
+    finally{button.disabled=false}
+  });
+}
+function initUpload(){
+  const building=document.getElementById("upload-building"),kind=document.getElementById("upload-kind"),mode=document.getElementById("upload-mode"),modeWrap=document.getElementById("upload-mode-wrap"),file=document.getElementById("upload-file"),help=document.getElementById("upload-help"),form=document.getElementById("upload-form"),status=document.getElementById("upload-status"),button=document.getElementById("upload-submit"),newWrap=document.getElementById("new-object-wrap"),newName=document.getElementById("new-object-name");
+  E.forEach((o,i)=>{const option=document.createElement("option");option.value=o.folder||`Building${i+1}`;option.textContent=`${o.name} (${option.value})`;building.appendChild(option)});
+  const createOption=document.createElement("option");createOption.value="__new__";createOption.textContent="＋ Создать новый объект";building.appendChild(createOption);
+  const nextNumber=Math.max(0,...E.map(o=>Number((o.folder||"").match(/^Building(\d+)$/i)?.[1]||0)))+1;newName.value=`Building${nextNumber}`;
+  function updateFileOptions(){
+    const creating=building.value==="__new__";newWrap.hidden=!creating;newName.required=creating;
+    if(creating){kind.value="object";kind.disabled=true;mode.value="create";mode.disabled=true;modeWrap.hidden=false;file.accept=".json,application/json";help.textContent="Выберите паспорт object.json (JSON) с object_id вида building_7. CSV загрузите после создания объекта."}
+    else{kind.disabled=false;const passport=kind.value==="object";if(passport){mode.value="replace";mode.disabled=true;modeWrap.hidden=true;file.accept=".json,application/json";help.textContent="Выберите паспорт в формате JSON; object_id должен соответствовать выбранной папке."}
+    else{mode.disabled=false;modeWrap.hidden=false;file.accept=".csv,text/csv";help.textContent=mode.value==="append"?"Загрузите только новые строки с теми же заголовками и без повторяющихся меток времени.":"Загрузите полный CSV выбранного типа. Текущий исходный файл останется нетронутым."}}
+  }
+  building.addEventListener("change",()=>{file.value="";updateFileOptions()});kind.addEventListener("change",()=>{file.value="";updateFileOptions()});mode.addEventListener("change",updateFileOptions);updateFileOptions();
+  form.addEventListener("submit",async event=>{
+    event.preventDefault();const selected=file.files[0];if(!selected){status.textContent="Сначала выберите файл.";status.className="upload-status error";return}
+    const expectedExtension=kind.value==="object"?".json":".csv";
+    if(!selected.name.toLowerCase().endsWith(expectedExtension)){status.textContent=kind.value==="object"?"Для паспорта выберите JSON-файл object.json. Сначала загрузите паспорт, затем отдельно добавьте invoice.csv и telemetry.csv.":"Для этого типа данных выберите CSV-файл.";status.className="upload-status error";return}
+    if(selected.size>32*1024*1024){status.textContent="Файл больше 32 МБ.";status.className="upload-status error";return}
+    button.disabled=true;status.className="upload-status";status.textContent="Файл проверяется, отчёты пересчитываются… это может занять до минуты.";
+    const query=new URLSearchParams({building:building.value==="__new__"?newName.value.trim():building.value,kind:kind.value,mode:mode.value});
+    try{
+      const response=await fetch(`/api/upload?${query.toString()}`,{method:"POST",headers:{"Content-Type":"application/octet-stream"},body:selected});
+      const payload=await response.json();if(!response.ok||!payload.ok)throw new Error(payload.message||"Не удалось загрузить файл.");
+      status.textContent=payload.message;status.className="upload-status success";file.value="";setTimeout(()=>window.location.reload(),1200);
+    }catch(error){status.textContent=error.message||"Нет связи с приложением.";status.className="upload-status error"}
+    finally{button.disabled=false}
+  });
+}
+init();
+initBundleUpload();
+initUpload();
+</script></body></html>

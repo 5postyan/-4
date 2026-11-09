@@ -11,6 +11,6 @@ WORKDIR /app
 COPY requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
-RUN mkdir -p /app/out /app/logs
+RUN mkdir -p /app/out /app/logs /app/added_data /app/runtime_data
 EXPOSE 8000
 CMD ["python", "docker_entrypoint.py"]

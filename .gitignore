@@ -1,5 +1,6 @@
 # Local case data contains object identifiers and must not be published.
-/data/
+/data/*
+!/data/.gitkeep
 /out/
 /logs/
 /dashboard.html
@@ -9,3 +10,7 @@ __pycache__/
 venv/
 .env
 .DS_Store
+/added_data/
+/runtime_data/
+/removed_test_objects_backup/
+/deliverables/

@@ -8,9 +8,13 @@ services:
       LAUNCH_DATA_DIR: /app/data
       LAUNCH_OUT_DIR: /app/out
       LAUNCH_LOG_DIR: /app/logs
+      LAUNCH_UPLOAD_DIR: /app/added_data
+      LAUNCH_RUNTIME_DIR: /app/runtime_data
       LAUNCH_PORT: "8000"
     volumes:
       - ./data:/app/data:ro
       - ./out:/app/out
       - ./logs:/app/logs
+      - ./added_data:/app/added_data
+      - ./runtime_data:/app/runtime_data
     restart: unless-stopped

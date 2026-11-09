@@ -1,48 +1,238 @@
 <!DOCTYPE html>
 <html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
 <title>Запуск энергетического объекта — карточка запуска</title>
 <style>
-:root{box-sizing:border-box;--bg:#f3f6f8;--card:#fff;--tx:#182b39;--mut:#607481;--bd:#dce5e9;--ok:#18734b;--okb:#e5f4eb;--wip:#9a6500;--wipb:#fff5dd;--bad:#aa3932;--badb:#fff0ed;--ns:#62727c;--nsb:#edf1f3;--acc:#176b87;--shadow:0 2px 10px #173a4c0b}
-*{box-sizing:border-box}html{scroll-padding-top:76px}body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}main{max-width:1260px;margin:0 auto;padding:26px 22px 42px}h1{font-size:clamp(23px,3vw,30px);line-height:1.2;margin:4px 0 7px;letter-spacing:-.02em}h2{font-size:18px;line-height:1.3;margin:20px 0 10px}.mut{color:var(--mut);font-size:13px}#meta{margin:0 0 17px}
-nav{position:sticky;top:0;z-index:5;display:flex;gap:7px;flex-wrap:wrap;margin:0 -6px 18px;padding:9px 6px;background:#f3f6f8ed;backdrop-filter:blur(8px);border-bottom:1px solid var(--bd)}nav button,.step button{border:1px solid var(--bd);background:var(--card);color:var(--tx);padding:8px 13px;border-radius:9px;cursor:pointer;font:inherit;transition:background .15s,border-color .15s}nav button:hover,.step button:hover{border-color:var(--acc)}nav button.on,.step button.on{background:var(--acc);color:#fff;border-color:var(--acc)}button:focus-visible,.obj:focus-visible{outline:3px solid #4dabc8;outline-offset:2px}
-.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,310px),1fr));gap:12px}.card{background:var(--card);border:1px solid var(--bd);border-radius:13px;padding:15px;box-shadow:var(--shadow)}.obj{cursor:pointer;transition:transform .15s,border-color .15s,box-shadow .15s}.obj:hover{transform:translateY(-2px);border-color:#9abac6;box-shadow:0 6px 18px #173a4c12}.obj.sel{border-color:var(--acc);box-shadow:0 0 0 2px #176b8724}.obj b{font-size:16px}.chips{display:flex;gap:5px;margin-top:10px;flex-wrap:wrap}.chip{display:inline-flex;align-items:center;font-size:12px;padding:4px 9px;border-radius:999px;font-weight:650;white-space:nowrap}.completed{background:var(--okb);color:var(--ok)}.in_progress{background:var(--wipb);color:var(--wip)}.blocked{background:var(--badb);color:var(--bad)}.not_started{background:var(--nsb);color:var(--ns)}
-.stage{margin:10px 0;padding:17px}.stage h3{margin:0 0 10px;font-size:16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}.ck{display:grid;grid-template-columns:100px minmax(0,1fr);gap:3px 10px;padding:10px 0;border-top:1px solid var(--bd);font-size:14px}.ck b{font-size:11px;letter-spacing:.025em}.pass{color:var(--ok)}.fail,.unavailable{color:var(--bad)}.warn,.pending{color:var(--wip)}.na{color:var(--ns)}.ob{margin:4px 0 5px 110px;font-size:13px;color:var(--mut);overflow-wrap:anywhere}.ob code{background:var(--nsb);padding:2px 5px;border-radius:4px;word-break:break-all}.next{margin-top:11px;padding:11px 13px;border-left:3px solid var(--acc);background:#edf5f7;border-radius:5px;font-size:14px}.ready{padding:11px 14px;border-radius:10px;font-weight:750;margin:10px 0 14px}.step{display:flex;gap:7px;flex-wrap:wrap;margin:10px 0 14px}.scroll{overflow-x:auto;border-radius:10px}table{border-collapse:collapse;width:100%;font-size:13px;background:var(--card)}th,td{border-bottom:1px solid var(--bd);padding:9px 10px;text-align:left;vertical-align:top}th{position:sticky;top:0;background:#edf3f5;color:#354d59;font-weight:700}td{overflow-wrap:anywhere}pre{border:1px solid var(--bd);border-radius:8px;background:#f8fafb;padding:12px}
-.missing-files{margin:10px 0;padding:11px 13px;border:1px solid #e8c7c1;border-left:4px solid var(--bad);border-radius:8px;background:var(--badb);color:var(--bad)}
-@media(max-width:680px){main{padding:18px 13px 30px}nav{flex-wrap:nowrap;overflow-x:auto}nav button{flex:0 0 auto}.ck{grid-template-columns:1fr;gap:2px}.ob{margin-left:0}.stage{padding:14px}th,td{padding:7px 8px;font-size:12px}}
-</style></head><body><main>
-<h1>Запуск энергетического объекта — карточка запуска</h1>
-<div class="mut" id="meta"></div>
-<nav id="tabs"></nav><div id="view"></div>
-<p class="mut">Прототип: статусы вычисляются только детерминированными проверками (LLM не назначает готовность). Управление — только тестовый контур/имитатор, реальные команды не отправляются. Данные в страницу встроены снимком.</p>
+:root{
+  --bg:#edf0ee;--panel:#fbfcfb;--raise:#fff;--ink:#14201f;--mut:#566663;--line:#d5dcd9;--line2:#e5eae8;
+  --acc:#0f5c5c;--acc-t:#dcebea;--focus:#1b8f8f;
+  --ok:#1b6e45;--ok-t:#dff1e6;--wip:#8f5a00;--wip-t:#fbeccb;--bad:#a8322b;--bad-t:#fbe3df;--ns:#59676a;--ns-t:#e6ebea;
+  --mono:ui-monospace,"Cascadia Code","SF Mono",Menlo,Consolas,monospace;
+  --sans:"Segoe UI Variable Text","Segoe UI",system-ui,-apple-system,Roboto,"Helvetica Neue",Arial,sans-serif;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root{
+  --bg:#0f1615;--panel:#151e1d;--raise:#1a2423;--ink:#e4ecea;--mut:#98aaa6;--line:#2a3735;--line2:#222d2b;
+  --acc:#5cc2bd;--acc-t:#1b3534;--focus:#5cc2bd;
+  --ok:#6fd49b;--ok-t:#16301f;--wip:#f0b958;--wip-t:#33270e;--bad:#ff8f84;--bad-t:#3a1b18;--ns:#9fb0ad;--ns-t:#222d2b}}
+*{box-sizing:border-box}
+html{scroll-padding-top:84px}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.55 var(--sans);-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--focus);outline-offset:2px;border-radius:6px}
+code{font-family:var(--mono);font-size:.88em;background:var(--ns-t);padding:1px 6px;border-radius:5px;overflow-wrap:anywhere}
+.mut{color:var(--mut);font-size:13px}
+
+/* top bar */
+header.top{position:sticky;top:0;z-index:10;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.top-in{max-width:1320px;margin:0 auto;padding:12px 24px;display:flex;align-items:center;gap:22px;flex-wrap:wrap}
+.brand{display:flex;flex-direction:column;line-height:1.2}
+.brand b{font-size:16px;letter-spacing:-.01em}
+.brand span{font-size:12px;color:var(--mut);font-family:var(--mono)}
+nav{display:flex;gap:4px;margin-left:auto;overflow-x:auto;max-width:100%;padding:3px;background:var(--ns-t);border-radius:11px}
+nav button{border:0;background:transparent;padding:7px 14px;border-radius:8px;cursor:pointer;white-space:nowrap;color:var(--mut);font-weight:600;font-size:14px}
+nav button:hover{color:var(--ink)}
+nav button.on{background:var(--raise);color:var(--ink);box-shadow:0 1px 2px #0003}
+.energy-link{display:inline-flex;align-items:center;white-space:nowrap;text-decoration:none;border:1px solid var(--line);background:var(--raise);color:var(--acc);padding:7px 12px;border-radius:9px;font-size:14px;font-weight:650}.energy-link:hover{background:var(--acc-t)}
+
+main{max-width:1320px;margin:0 auto;padding:22px 24px 48px}
+.foot{margin-top:30px;padding-top:14px;border-top:1px solid var(--line);color:var(--mut);font-size:12.5px;max-width:78ch}
+
+/* layout objects */
+.split{display:grid;grid-template-columns:300px minmax(0,1fr);gap:22px;align-items:start}
+.side{position:sticky;top:84px;display:flex;flex-direction:column;gap:8px;max-height:calc(100vh - 100px);overflow:auto;padding:2px}
+.obj{all:unset;box-sizing:border-box;display:block;cursor:pointer;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--panel)}
+.obj:hover{border-color:var(--acc)}
+.obj:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.obj.sel{background:var(--raise);border-color:var(--acc);box-shadow:inset 4px 0 0 var(--acc)}
+.obj .nm{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.obj .nm b{font-size:15px}
+.obj .id{font-family:var(--mono);font-size:11.5px;color:var(--mut)}
+.obj .st{margin-top:7px;font-size:12.5px;color:var(--mut)}
+
+/* mini pipeline */
+.pipe{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;margin-top:9px}
+.pipe i{height:7px;border-radius:4px;background:var(--ns-t);display:block}
+.pipe i.completed{background:var(--ok)}
+.pipe i.in_progress{background:repeating-linear-gradient(135deg,var(--wip) 0 5px,var(--wip-t) 5px 10px)}
+.pipe i.blocked{background:var(--bad)}
+
+/* status chips */
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:650;padding:3px 10px;border-radius:999px;white-space:nowrap}
+.chip::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.chip.completed{background:var(--ok-t);color:var(--ok)}
+.chip.in_progress{background:var(--wip-t);color:var(--wip)}
+.chip.blocked{background:var(--bad-t);color:var(--bad)}
+.chip.not_started{background:var(--ns-t);color:var(--ns)}
+
+/* object head */
+.head{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:20px 22px}
+.head h1{margin:0;font-size:clamp(22px,2.6vw,30px);line-height:1.15;letter-spacing:-.02em}
+.head .sub{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:6px}
+.verdict{margin-top:16px;padding:11px 14px;border-radius:10px;font-weight:700}
+.verdict.completed{background:var(--ok-t);color:var(--ok)}
+.verdict.blocked{background:var(--bad-t);color:var(--bad)}
+
+/* stepper */
+.stepper{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;margin-top:18px}
+.sn{all:unset;box-sizing:border-box;cursor:pointer;position:relative;padding:0 8px 0 0;display:flex;flex-direction:column;gap:8px}
+.sn:focus-visible{outline:3px solid var(--focus);outline-offset:3px}
+.sn .rail{display:flex;align-items:center}
+.sn .dot{flex:none;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-weight:800;font-size:14px;border:2px solid currentColor;background:var(--panel)}
+.sn .bar{flex:1;height:3px;margin:0 6px;border-radius:2px;background:currentColor;opacity:.35}
+.sn:last-child .bar{display:none}
+.sn.completed{color:var(--ok)}.sn.completed .dot{background:var(--ok);color:#fff;border-color:var(--ok)}
+.sn.in_progress{color:var(--wip)}
+.sn.blocked{color:var(--bad)}.sn.blocked .dot{background:var(--bad);color:#fff;border-color:var(--bad)}
+.sn.not_started{color:var(--ns)}
+.sn .lb{color:var(--ink);font-size:13.5px;font-weight:650;line-height:1.3;padding-right:6px}
+.sn .ss{color:var(--mut);font-size:12px;font-weight:500}
+@media(prefers-color-scheme:dark){.sn.completed .dot,.sn.blocked .dot{color:#0f1615}}
+
+/* alerts */
+.alert{margin-top:14px;padding:12px 15px;border:1px solid var(--bad);border-left-width:5px;border-radius:10px;background:var(--bad-t);color:var(--bad)}
+.alert ul{margin:6px 0;padding-left:20px}
+
+/* stages */
+.stages{display:flex;flex-direction:column;gap:10px;margin-top:16px}
+details.stage{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}
+details.stage[open]{background:var(--raise)}
+details.stage>summary{list-style:none;cursor:pointer;display:flex;gap:12px;align-items:center;flex-wrap:wrap;padding:14px 18px}
+details.stage>summary::-webkit-details-marker{display:none}
+details.stage>summary::after{content:"";margin-left:auto;width:9px;height:9px;border-right:2px solid var(--mut);border-bottom:2px solid var(--mut);transform:rotate(45deg);transition:transform .15s}
+details.stage[open]>summary::after{transform:rotate(-135deg)}
+.stage .t{font-size:16px;font-weight:700}
+.stage .n{font-family:var(--mono);color:var(--mut);font-size:13px}
+.stage .cnt{font-size:12.5px;color:var(--mut)}
+.body{padding:2px 18px 16px}
+.deps{margin:4px 0 8px;font-size:13.5px;color:var(--mut)}
+.ck{display:grid;grid-template-columns:30px minmax(0,1fr);gap:4px 12px;padding:11px 0;border-top:1px solid var(--line2)}
+.ico{width:26px;height:26px;border-radius:7px;display:grid;place-items:center;font-weight:800;font-size:13px}
+.ico.pass{background:var(--ok-t);color:var(--ok)}
+.ico.fail,.ico.unavailable{background:var(--bad-t);color:var(--bad)}
+.ico.warn,.ico.pending{background:var(--wip-t);color:var(--wip)}
+.ico.na{background:var(--ns-t);color:var(--ns)}
+.ck .h{font-size:14.5px}
+.ck .h b{font-family:var(--mono);font-size:12px;color:var(--mut);margin-right:6px;font-weight:600}
+.ck .src{font-size:12.5px;color:var(--mut);margin-top:2px}
+.ck .stt{font-size:11.5px;font-weight:700;margin-left:6px}
+.ck .stt.pass{color:var(--ok)}.ck .stt.fail,.ck .stt.unavailable{color:var(--bad)}.ck .stt.warn,.ck .stt.pending{color:var(--wip)}.ck .stt.na{color:var(--ns)}
+.obs{grid-column:2;margin:4px 0 0;padding:8px 12px;border-left:3px solid var(--bad);background:var(--bad-t);border-radius:0 8px 8px 0;font-size:13px;overflow-wrap:anywhere}
+.obs div+div{margin-top:5px}
+.next{margin-top:12px;padding:12px 14px;border-left:4px solid var(--acc);background:var(--acc-t);border-radius:0 10px 10px 0;font-size:14px}
+
+/* tables, cards */
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{border-bottom:1px solid var(--line2);padding:9px 12px;text-align:left;vertical-align:top;overflow-wrap:anywhere}
+th{background:var(--ns-t);font-weight:700;color:var(--mut);position:sticky;top:0}
+td.ok{color:var(--ok)}td.no{color:var(--bad)}
+pre{margin:12px 0 0;padding:14px;border:1px solid var(--line);border-radius:10px;background:var(--bg);font:12.5px/1.5 var(--mono);white-space:pre-wrap;overflow-x:auto}
+h2{font-size:18px;margin:22px 0 10px;letter-spacing:-.01em}
+.steps{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0}
+.steps button{border:1px solid var(--line);background:var(--panel);padding:7px 14px;border-radius:9px;cursor:pointer;font-weight:600;font-size:14px}
+.steps button:hover{border-color:var(--acc)}
+.steps button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+@media(prefers-color-scheme:dark){.steps button.on{color:#0f1615}}
+.meter{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.meter b{font-size:34px;letter-spacing:-.03em;line-height:1}
+
+@media(max-width:900px){
+  .split{grid-template-columns:1fr}
+  .side{position:static;flex-direction:row;max-height:none;overflow-x:auto;padding-bottom:6px}
+  .obj{flex:0 0 220px}
+}
+@media(max-width:640px){
+  .top-in,main{padding-left:14px;padding-right:14px}
+  nav{margin-left:0;width:100%}
+  .stepper{grid-template-columns:1fr 1fr;row-gap:16px}
+  .sn:nth-child(2) .bar{display:none}
+  .head{padding:16px}
+  th,td{padding:7px 8px;font-size:12px}
+}
+</style></head><body>
+<header class="top"><div class="top-in">
+  <div class="brand"><b>Запуск энергетического объекта</b><span id="meta"></span></div>
+  <nav id="tabs" aria-label="Разделы"></nav><a class="energy-link" href="energy.html">Энергобаланс</a>
+</div></header>
+<main>
+  <div id="view"></div>
+  <p class="foot">Прототип: статусы вычисляются только детерминированными проверками, LLM готовность не назначает. Управление идёт через тестовый контур или имитатор, реальные команды не отправляются. Данные встроены в страницу снимком.</p>
 </main>
 <script>
 const D=__DATA__;
 const RU={completed:"Завершён",in_progress:"В работе",blocked:"Заблокирован",not_started:"Не начат"};
-const ST={pass:"ПРОЙДЕНО",fail:"ОШИБКА",warn:"ВНИМАНИЕ",na:"Н/П",unavailable:"НЕДОСТУПНО",pending:"ОЖИДАЕТ"};
+const ST={pass:"пройдено",fail:"ошибка",warn:"внимание",na:"не применимо",unavailable:"нет данных",pending:"ожидает"};
+const IC={pass:"✓",fail:"✕",warn:"!",na:"–",unavailable:"?",pending:"…"};
 const e=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-let tab="objects",sel="building_2",step=0;
-const TABS=[["objects","Объекты (6)"],["flow","Сквозной запуск Building 2"],["scen","Сценарии ТЗ (11)"],["rules","Правила"]];
-function chips(r){return `<div class="chips">`+r.stages.map(s=>`<span class="chip ${s.status}" title="${e(s.name)}">${s.n}. ${RU[s.status]}</span>`).join("")+`</div>`}
-function ints(o){const a=(o.intervals||[]).filter(x=>x.from).slice(0,3).map(x=>`<code>${e(x.from)}${x.to&&x.to!==x.from?" … "+e(x.to):""}${x.n>1?" ("+x.n+")":""}</code>`).join(" ");return a}
+let tab="objects",sel=(D.overview&&D.overview.building_2)?"building_2":Object.keys(D.overview||{})[0],step=0;
+const TABS=[["objects","Объекты ("+Object.keys(D.overview||{}).length+")"],["flow","Сквозной запуск"],["scen","Сценарии ТЗ ("+(D.scenarios||[]).length+")"],["rules","Правила"]];
+
+function pipe(r){return `<div class="pipe" aria-hidden="true">`+r.stages.map(s=>`<i class="${s.status}"></i>`).join("")+`</div>`}
+function where(r){if(r.ready)return "Готов к эксплуатации";const s=r.stages.find(x=>x.status!=="completed");return s?`Этап ${s.n} · ${RU[s.status]}`:"—"}
+function ints(o){return (o.intervals||[]).filter(x=>x.from).slice(0,3).map(x=>`<code>${e(x.from)}${x.to&&x.to!==x.from?" … "+e(x.to):""}${x.n>1?" ("+x.n+")":""}</code>`).join(" ")}
+
+function stepper(r){return `<div class="stepper">`+r.stages.map(s=>{
+  const sym=s.status==="completed"?"✓":s.status==="blocked"?"!":s.status==="in_progress"?"…":s.n;
+  return `<button class="sn ${s.status}" data-go="st-${s.n}" title="Перейти к этапу ${s.n}"><span class="rail"><span class="dot">${sym}</span><span class="bar"></span></span><span class="lb">${e(s.name)}</span><span class="ss">${RU[s.status]}</span></button>`}).join("")+`</div>`}
+
 function stageHtml(s){
- let h=`<div class="card stage"><h3>Этап ${s.n}. ${e(s.name)} <span class="chip ${s.status}">${RU[s.status]}</span><span class="mut">ответственный: ${e(s.responsible)}</span></h3>`;
- if(s.unclosed_dependencies.length)h+=`<div class="mut">Незакрытые зависимости: ${s.unclosed_dependencies.map(d=>`этап ${d.stage} «${e(d.name)}» — ${RU[d.status]}`).join("; ")}</div>`;
- if(!s.checks.length)h+=`<div class="mut">Проверки не запускались до завершения предыдущих этапов.</div>`;
- s.checks.forEach(c=>{h+=`<div class="ck"><b class="${c.status}">${ST[c.status]}</b><div><b style="font-size:13px">${c.id}</b> ${e(c.title)} — ${e(c.summary)}<div class="mut">источник: ${e(c.evidence.source)} · правила v${e(c.evidence.rules)}${c.mandatory?"":" · необязательная"}</div></div></div>`;
-  (c.status==="fail"||c.status==="unavailable")&&c.obstacles.slice(0,4).forEach(o=>{h+=`<div class="ob">${e(o.asset||o.field||o.block||"")}${o.signals?" · "+e([].concat(o.signals).join(", ")):""}: ${e(o.reason||"")} ${ints(o)}</div>`})});
- if(s.next_action)h+=`<div class="next"><b>Следующее действие:</b> ${e(s.next_action)}</div>`;
- return h+"</div>"}
-function resHtml(r){const errors=r.input_errors||[];const missing=r.missing_files||[];const issues=errors.length?errors.map(x=>`<li><b>${e(x.file)}</b> (${e(x.kind)}): ${e(x.message)}</li>`):missing.map(x=>`<li><b>${e(x)}</b>: файл отсутствует</li>`);return `<div class="ready ${r.ready?"completed":"blocked"}">${r.ready?"ОБЪЕКТ ГОТОВ К ЭКСПЛУАТАЦИИ":"Готовность не объявлена"} — ${e(r.object_id)} (${e(r.name||"")})</div>`+(issues.length?`<div class="missing-files"><b>Проблемы входных файлов</b><ul>${issues.join("")}</ul><div>Обработка остальных доступных данных продолжена; соответствующие проверки отмечены как недоступные.</div></div>`:"")+r.stages.map(stageHtml).join("")}
+  const ck=s.checks||[],okN=ck.filter(c=>c.status==="pass"||c.status==="na").length;
+  const open=(s.status==="blocked"||s.status==="in_progress")?" open":"";
+  let h=`<details class="stage" id="st-${s.n}"${open}><summary><span class="n">${s.n}</span><span class="t">${e(s.name)}</span><span class="chip ${s.status}">${RU[s.status]}</span><span class="cnt">${ck.length?`проверок: ${okN} из ${ck.length}`:"проверки не запускались"} · ответственный: ${e(s.responsible)}</span></summary><div class="body">`;
+  const deps=s.unclosed_dependencies||[];
+  if(deps.length)h+=`<div class="deps">Сначала нужно закрыть: ${deps.map(d=>`этап ${d.stage} «${e(d.name)}» (${RU[d.status]})`).join("; ")}</div>`;
+  if(!ck.length)h+=`<div class="mut">Проверки запустятся после завершения предыдущих этапов.</div>`;
+  ck.forEach(c=>{
+    const ev=c.evidence||{};
+    h+=`<div class="ck"><span class="ico ${c.status}" aria-hidden="true">${IC[c.status]||"?"}</span><div><div class="h"><b>${e(c.id)}</b>${e(c.title)} — ${e(c.summary)}<span class="stt ${c.status}">${ST[c.status]||e(c.status)}</span></div><div class="src">источник: ${e(ev.source)} · правила v${e(ev.rules)}${c.mandatory?"":" · необязательная"}</div></div>`;
+    if((c.status==="fail"||c.status==="unavailable")&&(c.obstacles||[]).length){
+      h+=`<div class="obs">`+c.obstacles.slice(0,4).map(o=>`<div>${e(o.asset||o.field||o.block||"")}${o.signals?" · "+e([].concat(o.signals).join(", ")):""}: ${e(o.reason||"")} ${ints(o)}</div>`).join("")+`</div>`}
+    h+=`</div>`});
+  if(s.next_action)h+=`<div class="next"><b>Следующее действие:</b> ${e(s.next_action)}</div>`;
+  return h+`</div></details>`}
+
+function resHtml(r){
+  const errors=r.input_errors||[],missing=r.missing_files||[];
+  const issues=errors.length?errors.map(x=>`<li><b>${e(x.file)}</b> (${e(x.kind)}): ${e(x.message)}</li>`):missing.map(x=>`<li><b>${e(x)}</b>: файл отсутствует</li>`);
+  return `<section class="head"><div class="sub"><h1>${e(r.name||r.object_id)}</h1><span class="mut"><code>${e(r.object_id)}</code></span></div>`+
+   `<div class="verdict ${r.ready?"completed":"blocked"}">${r.ready?"Объект готов к эксплуатации":"Готовность не объявлена"}</div>`+
+   stepper(r)+
+   (issues.length?`<div class="alert"><b>Проблемы входных файлов</b><ul>${issues.join("")}</ul>Обработка остальных данных продолжена, затронутые проверки отмечены как «нет данных».</div>`:"")+
+   `</section><div class="stages">`+r.stages.map(stageHtml).join("")+`</div>`}
+
 const views={
- objects(){const o=D.overview;return `<div class="grid">`+Object.entries(o).map(([k,r])=>`<div class="card obj ${k===sel?"sel":""}" onclick="sel='${k}';render()"><b>${e(r.name||k)}</b><div class="mut">${e(k)}</div>${chips(r)}</div>`).join("")+`</div><h2>Карточка: ${e(sel)}</h2>`+resHtml(o[sel])},
- flow(){const f=D.flow,s=f.steps[step];const jl=f.journal.slice(0,s.journal_len);
-  return `<div class="mut">Один объект проходит блокировку → исправление → повторную проверку → запуск → изменение входов.</div><div class="step">`+f.steps.map((x,i)=>`<button class="${i===step?"on":""}" onclick="step=${i};render()">Шаг ${i+1}</button>`).join("")+`</div><h2>${e(s.title)}</h2>`+(s.rejected_request?`<div class="card"><b>Запрос «завершить этап 4» отклонён:</b> зависимости — ${s.rejected_request.unclosed_dependencies.map(d=>`этап ${d.stage} (${RU[d.status]})`).join(", ")}; материалы сохранены.</div>`:"")+resHtml(s.result)+
-  `<h2>Журнал (${jl.length})</h2><div class="card scroll"><table><tr><th>#</th><th>время (демо-часы)</th><th>кто</th><th>событие</th><th>этап</th><th>детали</th></tr>`+jl.map(j=>`<tr><td>${j.seq}</td><td>${e(j.time)}</td><td>${e(j.actor)}</td><td>${e(j.event)}</td><td>${j.stage||""}</td><td>${e(j.event==="stage_transition"?j.from+" → "+j.to:(j.reason||j.description||j.kind||""))}</td></tr>`).join("")+`</table></div>`},
- scen(){const ok=D.scenarios.filter(s=>s.match).length;return `<div class="card"><b>Самопроверка: ${ok} из ${D.scenarios.length} сценариев дают ожидаемое поведение.</b><div class="mut">${e(D.scenario_note||"Ожидания выведены из правил ТЗ; эталон организаторов не использовался.")}</div></div><div class="card scroll" style="margin-top:8px"><table><tr><th>№</th><th>Сценарий</th><th>Ожидалось</th><th>Получено</th><th></th></tr>`+D.scenarios.map(s=>`<tr><td>${s.n}</td><td>${e(s.name)}<div class="mut">${e((s.blockers||[]).join(" · "))}</div></td><td>${e(JSON.stringify(s.expected))}</td><td>${e(JSON.stringify(s.got))}</td><td class="${s.match?"pass":"fail"}"><b>${s.match?"OK":"FAIL"}</b></td></tr>`).join("")+`</table></div>`},
- rules(){return `<div class="card"><b>Версия правил ${e(D.rules.version)}</b> · точка проверки ${e(D.check_point)} · 6 объектов проверены за ${D.timing.overview_6_objects_sec} с (лимит ${D.timing.limit_sec_per_state} с).<pre style="white-space:pre-wrap;font-size:12.5px;overflow-x:auto">${e(JSON.stringify(D.rules,null,1))}</pre></div>`}};
-function render(){document.getElementById("tabs").innerHTML=TABS.map(([k,t])=>`<button class="${k===tab?"on":""}" onclick="tab='${k}';render()">${t}</button>`).join("");document.getElementById("view").innerHTML=views[tab]();
- document.getElementById("meta").textContent=`правила v${D.rules.version} · точка проверки ${D.check_point}`}
+  objects(){const o=D.overview;
+    return `<div class="split"><div class="side" role="list">`+Object.entries(o).map(([k,r])=>
+      `<button class="obj ${k===sel?"sel":""}" data-sel="${e(k)}" role="listitem" aria-pressed="${k===sel}"><div class="nm"><b>${e(r.name||k)}</b><span class="id">${e(k)}</span></div>${pipe(r)}<div class="st">${e(where(r))}</div></button>`).join("")+
+      `</div><div>${resHtml(o[sel])}</div></div>`},
+  flow(){const f=D.flow,s=f.steps[step],jl=f.journal.slice(0,s.journal_len);
+    return `<div class="mut" style="max-width:80ch">Один объект проходит путь: блокировка, исправление, повторная проверка, запуск, изменение входов.</div>`+
+     `<div class="steps">`+f.steps.map((x,i)=>`<button class="${i===step?"on":""}" data-step="${i}">Шаг ${i+1}</button>`).join("")+`</div><h2 style="margin-top:6px">${e(s.title)}</h2>`+
+     (s.rejected_request?`<div class="alert" style="margin:0 0 14px"><b>Запрос «завершить этап 4» отклонён.</b> Не закрыты: ${(s.rejected_request.unclosed_dependencies||[]).map(d=>`этап ${d.stage} (${RU[d.status]})`).join(", ")}. Материалы сохранены.</div>`:"")+
+     resHtml(s.result)+
+     `<h2>Журнал (${jl.length})</h2><div class="card scroll"><table><tr><th>#</th><th>Время (демо-часы)</th><th>Кто</th><th>Событие</th><th>Этап</th><th>Детали</th></tr>`+
+     jl.map(j=>`<tr><td>${j.seq}</td><td>${e(j.time)}</td><td>${e(j.actor)}</td><td>${e(j.event)}</td><td>${j.stage||""}</td><td>${e(j.event==="stage_transition"?j.from+" → "+j.to:(j.reason||j.description||j.kind||""))}</td></tr>`).join("")+`</table></div>`},
+  scen(){const sc=D.scenarios||[],ok=sc.filter(s=>s.match).length;
+    return `<div class="card"><div class="meter"><b>${ok} из ${sc.length}</b><span>сценариев дают ожидаемое поведение</span></div><div class="mut" style="margin-top:6px;max-width:80ch">${e(D.scenario_note||"Ожидания выведены из правил ТЗ, эталон организаторов не использовался.")}</div></div>`+
+     `<div class="card scroll" style="margin-top:12px"><table><tr><th>№</th><th>Сценарий</th><th>Ожидалось</th><th>Получено</th><th>Итог</th></tr>`+
+     sc.map(s=>`<tr><td>${s.n}</td><td>${e(s.name)}<div class="mut">${e((s.blockers||[]).join(" · "))}</div></td><td><code>${e(JSON.stringify(s.expected))}</code></td><td><code>${e(JSON.stringify(s.got))}</code></td><td class="${s.match?"ok":"no"}"><b>${s.match?"✓ OK":"✕ FAIL"}</b></td></tr>`).join("")+`</table></div>`},
+  rules(){const t=D.timing||{};
+    return `<div class="card"><div class="meter"><b>v${e(D.rules.version)}</b><span>версия правил · точка проверки <code>${e(D.check_point)}</code></span></div><div class="mut" style="margin-top:6px">6 объектов проверены за ${e(t.overview_6_objects_sec)} с (лимит ${e(t.limit_sec_per_state)} с).</div><pre>${e(JSON.stringify(D.rules,null,1))}</pre></div>`}
+};
+
+function render(){
+  document.getElementById("tabs").innerHTML=TABS.map(([k,t])=>`<button class="${k===tab?"on":""}" data-tab="${k}"${k===tab?' aria-current="page"':""}>${t}</button>`).join("");
+  document.getElementById("view").innerHTML=views[tab]();
+  document.getElementById("meta").textContent=`правила v${D.rules.version} · ${D.check_point}`}
+
+document.addEventListener("click",ev=>{
+  const b=ev.target.closest("[data-tab],[data-sel],[data-step],[data-go]");if(!b)return;
+  if(b.dataset.tab){tab=b.dataset.tab;render();window.scrollTo(0,0)}
+  else if(b.dataset.sel){sel=b.dataset.sel;render()}
+  else if(b.dataset.step){step=+b.dataset.step;render()}
+  else if(b.dataset.go){const d=document.getElementById(b.dataset.go);if(d){d.open=true;d.scrollIntoView({behavior:matchMedia("(prefers-reduced-motion:reduce)").matches?"auto":"smooth",block:"start"})}}
+});
 render();
 </script></body></html>
-
