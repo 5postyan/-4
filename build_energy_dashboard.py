@@ -219,8 +219,12 @@ def main() -> None:
     template = template_path.read_text(encoding="utf-8")
     objects = build_objects()
     payload = json.dumps(objects, ensure_ascii=False, separators=(",", ":"), allow_nan=False)
+    result_stat = RESULTS_PATH.stat() if RESULTS_PATH.is_file() else None
+    revision = f"{result_stat.st_mtime_ns}:{result_stat.st_size}" if result_stat else ""
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
-    OUTPUT.write_text(template.replace("__ENERGY__", payload.replace("</", "<\\/")), encoding="utf-8")
+    html = template.replace("__ENERGY__", payload.replace("</", "<\\/"))
+    html = html.replace("__REVISION__", json.dumps(revision))
+    OUTPUT.write_text(html, encoding="utf-8")
     print(f"Энергобаланс собран: {OUTPUT} · объектов: {len(objects)}")
 
 

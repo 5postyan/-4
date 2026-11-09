@@ -137,6 +137,10 @@ h2{font-size:18px;margin:22px 0 10px;letter-spacing:-.01em}
 @media(prefers-color-scheme:dark){.steps button.on{color:#0f1615}}
 .meter{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
 .meter b{font-size:34px;letter-spacing:-.03em;line-height:1}
+.refreshbar{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin:0 0 12px}
+.refreshbar button{border:1px solid var(--line);background:var(--acc);color:var(--bg);padding:8px 13px;border-radius:9px;cursor:pointer;font-weight:650;font-size:13px}
+.refreshbar button:disabled{opacity:.6;cursor:wait}
+.refresh-status{font-size:12px;color:var(--mut)}.refresh-status.error{color:var(--bad)}.refresh-status.success{color:var(--ok)}
 
 @media(max-width:900px){
   .split{grid-template-columns:1fr}
@@ -157,8 +161,9 @@ h2{font-size:18px;margin:22px 0 10px;letter-spacing:-.01em}
   <nav id="tabs" aria-label="Разделы"></nav><a class="energy-link" href="energy.html">Энергобаланс</a>
 </div></header>
 <main>
+  <div class="refreshbar"><button id="recheck-button" type="button">Перечитать файлы и обновить карточку</button><span class="refresh-status" id="refresh-status" role="status" aria-live="polite">Нажмите после замены CSV или JSON в папке data.</span></div>
   <div id="view"></div>
-  <p class="foot">Прототип: статусы вычисляются только детерминированными проверками, LLM готовность не назначает. Управление идёт через тестовый контур или имитатор, реальные команды не отправляются. Данные встроены в страницу снимком.</p>
+  <p class="foot">Статусы рассчитаны по текущим файлам. После загрузки или замены входов карточка перечитывает результаты и обновляется автоматически.</p>
 </main>
 <script>
 const D=__DATA__;
@@ -227,6 +232,28 @@ function render(){
   document.getElementById("view").innerHTML=views[tab]();
   document.getElementById("meta").textContent=`правила v${D.rules.version} · ${D.check_point}`}
 
+function initLiveRefresh(){
+  const button=document.getElementById("recheck-button"),status=document.getElementById("refresh-status"),initial=String(D.snapshot_revision||"");
+  button.addEventListener("click",async()=>{
+    button.disabled=true;status.className="refresh-status";status.textContent="Перечитываю файлы и запускаю проверки…";
+    try{
+      const response=await fetch("/api/recheck",{method:"POST"});const payload=await response.json();
+      if(!response.ok||!payload.ok)throw new Error(payload.message||"Не удалось обновить карточку.");
+      status.className="refresh-status success";status.textContent=`Проверка завершена. Объектов: ${payload.objects}. Обновляю карточку…`;
+      window.location.reload();
+    }catch(error){status.className="refresh-status error";status.textContent=error.message||"Нет связи с приложением.";button.disabled=false}
+  });
+  async function checkForUpdates(){
+    if(!initial||document.hidden)return;
+    try{
+      const response=await fetch("/api/revision",{cache:"no-store"});if(!response.ok)return;
+      const payload=await response.json();if(String(payload.revision||"")!==initial)window.location.reload();
+    }catch{}
+  }
+  window.setInterval(checkForUpdates,4000);
+  document.addEventListener("visibilitychange",()=>{if(!document.hidden)checkForUpdates()});
+}
+
 document.addEventListener("click",ev=>{
   const b=ev.target.closest("[data-tab],[data-sel],[data-step],[data-go]");if(!b)return;
   if(b.dataset.tab){tab=b.dataset.tab;render();window.scrollTo(0,0)}
@@ -235,4 +262,5 @@ document.addEventListener("click",ev=>{
   else if(b.dataset.go){const d=document.getElementById(b.dataset.go);if(d){d.open=true;d.scrollIntoView({behavior:matchMedia("(prefers-reduced-motion:reduce)").matches?"auto":"smooth",block:"start"})}}
 });
 render();
+initLiveRefresh();
 </script></body></html>

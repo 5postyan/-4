@@ -86,6 +86,8 @@ h1{margin:0;font-size:clamp(30px,5vw,54px);line-height:1.02;letter-spacing:-.035
 .toolbar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:0 0 14px}
 .toolbar button{border:1px solid var(--line);background:var(--card);color:var(--ink);font:inherit;font-weight:600;font-size:14px;padding:8px 16px;border-radius:999px;cursor:pointer;transition:background .2s,border-color .2s}
 .toolbar button:hover{border-color:var(--bad)}.toolbar button[aria-pressed="true"]{background:var(--bad);border-color:var(--bad);color:#fff}
+.toolbar #recheck-button{background:var(--sell);border-color:var(--sell);color:#fff}.toolbar #recheck-button:hover{filter:brightness(.94);border-color:var(--sell)}.toolbar #recheck-button:disabled{opacity:.6;cursor:wait}
+.refresh-status{font-size:12px;color:var(--mut)}.refresh-status.error{color:var(--bad)}.refresh-status.success{color:var(--ok)}
 .tag.err{color:#fff;background:var(--bad);border-color:var(--bad);font-weight:650}
 .card[hidden]{display:none}
 .iss{margin-top:28px}.iss h3{margin:0 0 4px;font-size:18px}
@@ -165,13 +167,14 @@ h1{margin:0;font-size:clamp(30px,5vw,54px);line-height:1.02;letter-spacing:-.035
   <div class="upload-status" id="upload-status" role="status" aria-live="polite"></div>
   </details>
 </details>
-<div class="toolbar"><button id="onlyerr" aria-pressed="false">Только объекты с ошибками</button><span class="mut" id="errsum"></span></div>
+<div class="toolbar"><button id="onlyerr" aria-pressed="false">Только объекты с ошибками</button><button id="recheck-button" type="button">Перечитать CSV/JSON</button><span class="refresh-status" id="refresh-status" role="status" aria-live="polite">Нажмите после замены файлов в папке data.</span><span class="mut" id="errsum"></span></div>
 <div class="grid" id="grid"></div>
 <div id="detail"></div>
 <p class="note">Потрачено — энергия, полученная из сети (отбор по счёту, подтверждённые значения; где их нет — исходные). Продано — энергия, отданная в сеть. Отрицательные значения и явные выбросы исключены из сумм, подробности в блоке «Ошибки в данных». Статусы этапов запуска взяты из результатов проверки (results.json).</p>
 </main>
 <script>
 const E=__ENERGY__;
+const INITIAL_REVISION=__REVISION__;
 const RU={completed:"Завершён",in_progress:"В работе",blocked:"Заблокирован",not_started:"Не начат"};
 const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const nf=(v,d=1)=>v.toLocaleString("ru-RU",{maximumFractionDigits:d,minimumFractionDigits:0});
@@ -274,7 +277,29 @@ function initUpload(){
     finally{button.disabled=false}
   });
 }
+function initLiveRefresh(){
+  const button=document.getElementById("recheck-button"),status=document.getElementById("refresh-status");
+  button.addEventListener("click",async()=>{
+    button.disabled=true;status.className="refresh-status";status.textContent="Перечитываю файлы и запускаю проверки…";
+    try{
+      const response=await fetch("/api/recheck",{method:"POST"});const payload=await response.json();
+      if(!response.ok||!payload.ok)throw new Error(payload.message||"Не удалось обновить данные.");
+      status.className="refresh-status success";status.textContent=`Проверка завершена. Объектов: ${payload.objects}. Обновляю страницу…`;
+      window.location.reload();
+    }catch(error){status.className="refresh-status error";status.textContent=error.message||"Нет связи с приложением.";button.disabled=false}
+  });
+  async function checkForUpdates(){
+    if(!INITIAL_REVISION||document.hidden)return;
+    try{
+      const response=await fetch("/api/revision",{cache:"no-store"});if(!response.ok)return;
+      const payload=await response.json();if(String(payload.revision||"")!==String(INITIAL_REVISION))window.location.reload();
+    }catch{}
+  }
+  window.setInterval(checkForUpdates,4000);
+  document.addEventListener("visibilitychange",()=>{if(!document.hidden)checkForUpdates()});
+}
 init();
 initBundleUpload();
 initUpload();
+initLiveRefresh();
 </script></body></html>

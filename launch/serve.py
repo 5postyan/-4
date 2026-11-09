@@ -12,7 +12,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-from .data_uploads import MAX_BUNDLE_BYTES, MAX_BUNDLE_UNPACKED_BYTES, MAX_UPLOAD_BYTES, add_uploaded_bundle, add_uploaded_file, add_uploaded_files
+from .data_uploads import MAX_BUNDLE_BYTES, MAX_BUNDLE_UNPACKED_BYTES, MAX_UPLOAD_BYTES, add_uploaded_bundle, add_uploaded_file, add_uploaded_files, refresh_application
 from .logging_config import configure_logging
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -48,6 +48,15 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         if path == "/health":
             self._json(200, {"status": "ok"})
             return
+        if path == "/api/revision":
+            result_path = OUT / "results.json"
+            try:
+                result_stat = result_path.stat()
+            except FileNotFoundError:
+                self._json(404, {"ok": False, "message": "Результаты проверки ещё не сформированы."})
+                return
+            self._json(200, {"revision": f"{result_stat.st_mtime_ns}:{result_stat.st_size}"})
+            return
         if path == "/":
             self.send_response(302)
             self.send_header("Location", "/energy.html")
@@ -57,6 +66,9 @@ class DashboardHandler(SimpleHTTPRequestHandler):
 
     def do_POST(self):
         request = urlsplit(self.path)
+        if request.path == "/api/recheck":
+            self._recheck()
+            return
         if request.path == "/api/upload-files":
             self._upload_files()
             return
@@ -102,6 +114,22 @@ class DashboardHandler(SimpleHTTPRequestHandler):
         except Exception as error:
             logger.error("upload_failed object=%s kind=%s error_type=%s", building, kind, type(error).__name__)
             self._json(500, {"ok": False, "message": "Не удалось обработать файл. Проверьте журнал приложения."})
+
+    def _recheck(self) -> None:
+        origin = self.headers.get("Origin")
+        if origin and urlsplit(origin).hostname not in {"127.0.0.1", "localhost"}:
+            self._json(403, {"ok": False, "message": "Перепроверка разрешена только со страницы локального приложения."})
+            return
+        try:
+            result = refresh_application()
+            result_path = OUT / "results.json"
+            result_stat = result_path.stat()
+            result["revision"] = f"{result_stat.st_mtime_ns}:{result_stat.st_size}"
+            logger.info("recheck_success objects=%s revision=%s", result["objects"], result["revision"])
+            self._json(200, result)
+        except Exception as error:
+            logger.error("recheck_failed error_type=%s", type(error).__name__)
+            self._json(500, {"ok": False, "message": "Не удалось перечитать данные. Проверьте logs/application.log."})
 
     def _upload_bundle(self) -> None:
         """Accept one ZIP containing a complete object's files."""

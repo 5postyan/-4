@@ -209,6 +209,32 @@ def _promote_outputs(stage_out: Path, out_dir: Path, token: str) -> None:
         os.replace(temporary, target)
 
 
+def refresh_application() -> dict[str, Any]:
+    """Reload source files, rebuild both pages, and keep source data untouched."""
+    with UPLOAD_LOCK:
+        base_value = os.environ.get("LAUNCH_BASE_DATA_DIR") or os.environ.get("LAUNCH_DATA_DIR") or str(ROOT / "data")
+        base_dir = Path(base_value).expanduser().resolve()
+        upload_dir = Path(os.environ["LAUNCH_UPLOAD_DIR"]).resolve()
+        runtime_dir = Path(os.environ["LAUNCH_RUNTIME_DIR"]).resolve()
+        out_dir = Path(os.environ["LAUNCH_OUT_DIR"]).resolve()
+        log_dir = Path(os.environ["LAUNCH_LOG_DIR"]).resolve()
+        token = uuid.uuid4().hex
+        stage_out = runtime_dir / f"refresh-out-{token}"
+        try:
+            data_dir = prepare_data_workspace(base_dir, upload_dir, runtime_dir, out_dir)
+            _rebuild(data_dir, stage_out, log_dir)
+            _promote_outputs(stage_out, out_dir, token)
+            os.environ["LAUNCH_DATA_DIR"] = str(data_dir)
+            return {
+                "ok": True,
+                "objects": len(object_folders(data_dir)),
+                "message": "Данные перечитаны, карточка запуска и энергобаланс обновлены.",
+            }
+        finally:
+            if stage_out.exists():
+                _owned_remove(stage_out, runtime_dir, "refresh-out-")
+
+
 def add_uploaded_file(building_name: str, kind: str, mode: str, content: bytes) -> dict[str, Any]:
     """Add CSV rows or replace an input file, then rebuild reports from a private copy."""
     folder_match = re.fullmatch(r"Building(\d+)", building_name, flags=re.IGNORECASE)

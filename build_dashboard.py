@@ -25,6 +25,8 @@ def main():
     
     # Чтение и десериализация результатов
     data = json.loads(SOURCE.read_text(encoding="utf-8"))
+    source_stat = SOURCE.stat()
+    data["snapshot_revision"] = f"{source_stat.st_mtime_ns}:{source_stat.st_size}"
     
     # Чтение HTML-шаблона
     html = (ROOT / "dashboard_template.html").read_text(encoding="utf-8")
